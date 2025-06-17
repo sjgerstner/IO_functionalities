@@ -41,7 +41,7 @@ https://anonymous.4open.science/r/TransformerLens-0EA4/
 First, create your environment and install requirements:
 
 ```[bash]
-conda create -n wcos python==3.12.4
+conda create -n wcos python==3.12.9
 conda activate wcos
 pip install -r requirements.txt
 ```
