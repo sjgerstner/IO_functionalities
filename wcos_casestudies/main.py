@@ -19,7 +19,7 @@ torch.set_grad_enabled(False)
 
 DEVICE='cuda:0'
 
-def cosines(model_name, cache_dir=None, checkpoint_value=None):
+def cosines(model_name, cache_dir=None, checkpoint_value=None, refactor_glu=True):
     """Compute weight cosines within each neuron of the given model
     and return result as a dict of three tensors (gatelin, linout, gateout),
     each of which is of shape (layer neuron)."""
@@ -29,6 +29,7 @@ def cosines(model_name, cache_dir=None, checkpoint_value=None):
         cache_dir=cache_dir,
         local_files_only=True,
         device='cpu',
+        refactor_glu=refactor_glu,
         ) #changed the transformer_lens code, don't disable fold_ln
 
     #new shape: layer neuron model_dim
@@ -52,6 +53,8 @@ def analysis(model_name, args, cache_dir=None, checkpoint_value=None):
     and then does the analyses specified in the args"""
     #path
     path = f"results/{model_name}"
+    if args.refactor_glu:
+        path += '/refactored'
     if checkpoint_value is not None:
         path += f"/checkpoints/{checkpoint_value}"
     if not os.path.exists(path):
@@ -64,8 +67,13 @@ def analysis(model_name, args, cache_dir=None, checkpoint_value=None):
         with open(f"{path}/data.pickle", 'rb') as f:
             data = pickle.load(f)
     #else:
-    except:
-        data = cosines(model_name, cache_dir=cache_dir, checkpoint_value=checkpoint_value)
+    except RuntimeError as e:
+        print(f"Ignoring error: {e}")
+        data = cosines(
+            model_name,
+            cache_dir=cache_dir, checkpoint_value=checkpoint_value,
+            refactor_glu=args.refactor_glu,
+        )
     layers = data['gatelin'].shape[0]
     if checkpoint_value is not None:
         model_name=f"{model_name}/{checkpoint_value}"
@@ -120,6 +128,11 @@ def analysis(model_name, args, cache_dir=None, checkpoint_value=None):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--refactor_glu',
+        action='store_true',
+        help='whether to refactor the weights such that cos(w_gate,w_in)>=0'
+    )
     parser.add_argument(
         '--categories',
         action='store_true',
