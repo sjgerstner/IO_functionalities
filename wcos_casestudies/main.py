@@ -140,6 +140,11 @@ if __name__=="__main__":
         help='whether to refactor the weights such that cos(w_gate,w_in)>=0'
     )
     parser.add_argument(
+        '--randomness',
+        action='store_true',
+        help="compute 95 percent randomness regions (95 percent of mismatched weight cosines are in this region)",
+    )
+    parser.add_argument(
         '--categories',
         action='store_true',
         help='categorize the neurons'
