@@ -19,10 +19,7 @@ torch.set_grad_enabled(False)
 
 DEVICE='cuda:0'
 
-def cosines(model_name, cache_dir=None, checkpoint_value=None, refactor_glu=True):
-    """Compute weight cosines within each neuron of the given model
-    and return result as a dict of three tensors (gatelin, linout, gateout),
-    each of which is of shape (layer neuron)."""
+def _load_mlp_weights(model_name, cache_dir=None, checkpoint_value=None, refactor_glu=True):
     model = HookedTransformer.from_pretrained(
         model_name,
         checkpoint_value=checkpoint_value,
@@ -41,9 +38,15 @@ def cosines(model_name, cache_dir=None, checkpoint_value=None, refactor_glu=True
     gc.collect()
     torch.cuda.empty_cache()
 
-    gatelin = utils.cos(W_gate, W_in).cpu() #don't overload the gpu
-    linout = utils.cos(W_in, W_out).cpu()
-    gateout = utils.cos(W_gate, W_out).cpu()
+    return {"W_gate":W_gate, "W_in":W_in, "W_out":W_out}
+
+def cosines(mlp_weights):
+    """Compute weight cosines within each neuron of the given model
+    and return result as a dict of three tensors (gatelin, linout, gateout),
+    each of which is of shape (layer neuron)."""
+    gatelin = utils.cos(mlp_weights["W_gate"], mlp_weights["W_in"]).cpu() #don't overload the gpu
+    linout = utils.cos(mlp_weights["W_in"], mlp_weights["W_out"]).cpu()
+    gateout = utils.cos(mlp_weights["W_gate"], mlp_weights["W_out"]).cpu()
     data = {"gatelin":gatelin, "linout":linout, "gateout":gateout}
     return data
 
@@ -69,12 +72,15 @@ def analysis(model_name, args, cache_dir=None, checkpoint_value=None):
     #else:
     except RuntimeError as e:
         print(f"Ignoring error: {e}")
-        data = cosines(
+        mlp_weights = _load_mlp_weights(
             model_name,
             cache_dir=cache_dir, checkpoint_value=checkpoint_value,
             refactor_glu=args.refactor_glu,
         )
+        data = cosines(mlp_weights)
     layers = data['gatelin'].shape[0]
+    if args.randomness_regions and "randomness" not in data:
+        data["randomness"] = utils.randomness_regions(mlp_weights)
     if checkpoint_value is not None:
         model_name=f"{model_name}/{checkpoint_value}"
     #categories and category statistics
