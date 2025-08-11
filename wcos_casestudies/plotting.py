@@ -95,14 +95,29 @@ def wcos_plot(layer_list, arrangement, data, model_name):
         ax.set_xlim(-1.,1.)
         ax.set_ylim(-1.,1.)
         ax.set_aspect(1, share=True)
+        #actual data
         scatter = ax.scatter(
             data["gateout"][layer], data["linout"][layer], c=data["gatelin"][layer],
             vmin=-1., vmax=1., linewidths=0, s=.25, rasterized=True
             )
+        #standard normal randomness regions (e.g. red, dotted)
+        ax.axhline(y=data["beta"][0], color="red", linestyle="dotted")
+        ax.axhline(y=data["beta"][1], color="red", linestyle="dotted")
+        ax.axvline(x=data["beta"][0], color="red", linestyle="dotted")
+        ax.axvline(x=data["beta"][1], color="red", linestyle="dotted")
+        #layer-specific randomness regions
+        ax.axhline(y=data["randomness"]["linout"][layer,0], color="red", linestyle="dashed")
+        ax.axhline(y=data["randomness"]["linout"][layer,1], color="red", linestyle="dashed")
+        ax.axvline(x=data["randomness"]["gateout"][layer,0], color="red", linestyle="dashed")
+        ax.axvline(x=data["randomness"]["gateout"][layer,1], color="red", linestyle="dashed")
+        #title
         ax.set_title(f"Layer {layer}", fontsize=10)
+        colorbar = fig.colorbar(scatter, ax=ax, label="$cos(w_{gate}, w_{in})$")
+        #standard normal and layer-specific randomness regions for gate-in
+        colorbar.axhline(y=data["beta"][2], color="red", linestyle="dotted")
+        colorbar.axhline(y=data["randomness"]["gatelin"][layer], color="red", linestyle="dashed")
     fig.supxlabel("$cos(w_{gate}, w_{out})$", fontsize=10)
     fig.supylabel("$cos(w_{in}, w_{out})$", fontsize=10)
-    fig.colorbar(scatter, ax=axs_list, label="$cos(w_{gate}, w_{in})$")
 
     fig.suptitle(model_name, fontsize=10)
 

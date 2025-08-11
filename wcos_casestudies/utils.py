@@ -3,6 +3,7 @@
 # from tqdm import tqdm
 # import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.stats import beta
 import torch
 import einops
 # from transformer_lens.utils import to_numpy
@@ -83,18 +84,37 @@ def cos(v1,v2, pattern='... d, ... d -> ...'):
     dot = einops.einsum(v1, v2, pattern)
     return dot
 
-def randomness_region(v1, v2, p=0.05):
+def randomness_region(v1, v2, p=0.05, absolute=False):
+    n = v1.shape[1] #number of neurons
     mismatched_cos = cos(v1, v2, 'l n1 d, l n2 d -> l (n1 n2)')
+    #get rid of matched entries
+    mask = torch.ones(mismatched_cos.shape[1], dtype=bool)
+    delete_list = [i*n+i for i in range(n)]
+    for k in delete_list:
+        mask[k]=0
+    mismatched_cos = mismatched_cos[mask]
+    if absolute:
+        mismatched_cos = torch.abs(mismatched_cos)
+        high_quantile = torch.quantile(mismatched_cos, q=p, dim=-1)
+        #return torch.unsqueeze(high_quantile, dim=1)#l 1
+        return high_quantile #l
     low_quantile = torch.quantile(mismatched_cos, q=p/2, dim=-1)#l
     high_quantile = torch.quantile(mismatched_cos, q=1-(p/2), dim=-1)#l
     return torch.stack((low_quantile, high_quantile), dim=1)#l 2
 
 def randomness_regions(mlp_weights, p=0.05):
     return {
-        "gatelin": randomness_region(mlp_weights["W_gate"], mlp_weights["W_in"], p),
+        "gatelin": randomness_region(mlp_weights["W_gate"], mlp_weights["W_in"], p, absolute=True),
         "gateout": randomness_region(mlp_weights["W_gate"], mlp_weights["W_out"], p),
         "linout": randomness_region(mlp_weights["W_in"], mlp_weights["W_out"], p),
     }
+
+def beta_randomness_region(d, p=0.05):
+    rv = beta(a=(d-1)/2, b=(d-1)/2, loc=-.5, scale=2)
+    low_quantile = rv.ppf(q=p/2)
+    high_quantile = rv.ppf(q=1-p/2)
+    absolute_quantile = rv.ppf(q=1-p)
+    return low_quantile, high_quantile, absolute_quantile
 
 # def wcos_ax(ax, gateout, linout, gatelin, s=1):
 #     """
