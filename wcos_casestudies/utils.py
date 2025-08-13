@@ -101,6 +101,7 @@ def torch_quantile(  # noqa: PLR0913 (too many arguments)
     return out.squeeze() if dim_was_none else out.squeeze(dim)
 
 def topk_df(vec, model, emb=None, k=64, nonneg=True):
+    #TODO refactor: shouldn't need whole model
     """
     model used for to_string fct and emb
     """
@@ -128,9 +129,9 @@ def neuron_analysis(model, layer, neuron, emb=None, k=64, verbose=True):
     lin = model.W_in[layer,:,neuron].detach()
     gate = model.W_gate[layer,:,neuron].detach()
 
-    gatelin = cos(gate, lin)
-    gateout = cos(gate, out)
-    linout = cos(lin, out)
+    gatelin = cos(gate, lin).item()
+    gateout = cos(gate, out).item()
+    linout = cos(lin, out).item()
 
     out_pos = topk_df(out, model, emb=emb, k=k)
     out_neg = topk_df(-out, model, emb=emb, k=k)

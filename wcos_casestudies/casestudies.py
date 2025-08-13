@@ -47,22 +47,22 @@ W_U = model.W_U.detach()
 
 #%%
 #load the data from running main.py
-path = f'{WORK_DIR}/results/{MODEL_NAME}'
+PATH = f'{WORK_DIR}/results/{MODEL_NAME}'
 if REFACTOR_GLU:
-    path += '/refactored'
-pickle_path = f'{path}/data.pickle'
-pt_path = f'{path}/data.pt'
-if exists(pt_path):
-    data = torch.load(pt_path, map_location='cuda')
-elif exists(pickle_path):
-    with open(pickle_path, 'rb') as f:
+    PATH += '/refactored'
+PICKLE_PATH = f'{PATH}/data.pickle'
+PT_PATH = f'{PATH}/data.pt'
+if exists(PT_PATH):
+    data = torch.load(PT_PATH, map_location='cuda')
+elif exists(PICKLE_PATH):
+    with open(PICKLE_PATH, 'rb') as f:
         data = pickle.load(f)
-    gatelin = data['gatelin'].cuda()
-    gateout = data['gateout'].cuda()
-    linout = data['linout'].cuda()
 else:
     raise RuntimeError("You haven't computed the cosines data yet! Please run main.py first.")
 
+gatelin = data['gatelin'].cuda()
+gateout = data['gateout'].cuda()
+linout = data['linout'].cuda()
 # %%
 WUWout = torch.einsum("l n d, d v -> l n v", W_out, W_U)
 print(WUWout.shape)
@@ -81,7 +81,7 @@ WUWout /= (norm_out*norm_U)
 print(WUWout.shape)
 
 # %%
-torch.save(WUWout, f'{path}/cosWUWout.pt')
+torch.save(WUWout, f'{PATH}/cosWUWout.pt')
 
 # %% [markdown]
 # #### Partition neurons
@@ -101,7 +101,7 @@ p_indices_readable = torch.stack(
 )
 
 # %%
-torch.save(p_indices_readable, f'{path}/partition.pt')
+torch.save(p_indices_readable, f'{PATH}/partition.pt')
 
 # %% [markdown]
 # #### Prediction / suppression neurons
@@ -152,7 +152,7 @@ else:
     supp_indices = ((kurtoses>max_part_kurt) & (skews<0)).nonzero()
 
 # %%
-torch.save({"prediction":pred_indices, "suppression":supp_indices}, f'{path}/pred-supp.pt')
+torch.save({"prediction":pred_indices, "suppression":supp_indices}, f'{PATH}/pred-supp.pt')
 
 # %% [markdown]
 # #### Entropy neurons
@@ -302,7 +302,7 @@ for i in ad_indices[:4,:]:
 
 # %%
 scores_to_save = torch.stack([scores_diagonal[i[1],:,i[0]] for i in ad_indices])
-torch.save([ad_indices, scores_to_save], f'{path}/attention.pt')
+torch.save([ad_indices, scores_to_save], f'{PATH}/attention.pt')
 
 # %% [markdown]
 # ### Comparing with our classification
@@ -333,7 +333,7 @@ ad_io = utils.count_categories(ad_indices[:4,:], gatelin, gateout, linout)
 print(ad_io)
 
 # %%
-with open("contingency.json", 'w') as f:
+with open("contingency.json", 'w', encoding='utf-8') as f:
     json.dump(
         {
             "partition": part_io,
