@@ -98,24 +98,44 @@ def wcos_plot(layer_list, arrangement, data, model_name):
         #actual data
         scatter = ax.scatter(
             data["gateout"][layer], data["linout"][layer], c=data["gatelin"][layer],
-            vmin=-1., vmax=1., linewidths=0, s=.25, rasterized=True
+            vmin=0., vmax=1., linewidths=0, s=.25, rasterized=True
             )
         #standard normal randomness regions (e.g. red, dotted)
-        ax.axhline(y=data["beta"][0], color="red", linestyle="dotted")
-        ax.axhline(y=data["beta"][1], color="red", linestyle="dotted")
-        ax.axvline(x=data["beta"][0], color="red", linestyle="dotted")
-        ax.axvline(x=data["beta"][1], color="red", linestyle="dotted")
+        ax.axhline(
+            y=data["beta"][0], color="red", linestyle="dotted", linewidth=.25
+        )
+        ax.axhline(
+            y=data["beta"][1], color="red", linestyle="dotted", linewidth=.25
+        )
+        ax.axvline(
+            x=data["beta"][0], color="red", linestyle="dotted", linewidth=.25
+        )
+        ax.axvline(
+            x=data["beta"][1], color="red", linestyle="dotted", linewidth=.25
+        )
         #layer-specific randomness regions
-        ax.axhline(y=data["randomness"]["linout"][layer,0], color="red", linestyle="dashed")
-        ax.axhline(y=data["randomness"]["linout"][layer,1], color="red", linestyle="dashed")
-        ax.axvline(x=data["randomness"]["gateout"][layer,0], color="red", linestyle="dashed")
-        ax.axvline(x=data["randomness"]["gateout"][layer,1], color="red", linestyle="dashed")
+        ax.axhline(
+            y=data["randomness"]["linout"][layer,0].item(), color="red", linestyle="dashed", linewidth=.25
+        )
+        ax.axhline(
+            y=data["randomness"]["linout"][layer,1].item(), color="red", linestyle="dashed", linewidth=.25
+        )
+        ax.axvline(
+            x=data["randomness"]["gateout"][layer,0].item(), color="red", linestyle="dashed", linewidth=.25
+        )
+        ax.axvline(
+            x=data["randomness"]["gateout"][layer,1].item(), color="red", linestyle="dashed", linewidth=.25
+        )
         #title
         ax.set_title(f"Layer {layer}", fontsize=10)
         colorbar = fig.colorbar(scatter, ax=ax, label="$cos(w_{gate}, w_{in})$")
         #standard normal and layer-specific randomness regions for gate-in
-        colorbar.axhline(y=data["beta"][2], color="red", linestyle="dotted")
-        colorbar.axhline(y=data["randomness"]["gatelin"][layer], color="red", linestyle="dashed")
+        colorbar.ax.plot(
+            .5, data["beta"][1], color="red", marker=".", markersize=.25,
+        )
+        colorbar.ax.axhline(
+            y=data["randomness"]["gatelin"][layer].item(), color="red", linewidth=.25,
+        )
     fig.supxlabel("$cos(w_{gate}, w_{out})$", fontsize=10)
     fig.supylabel("$cos(w_{in}, w_{out})$", fontsize=10)
 
