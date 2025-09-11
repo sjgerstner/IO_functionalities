@@ -1,7 +1,6 @@
-# import random
-# from functools import partial
-# from tqdm import tqdm
-# import matplotlib.pyplot as plt
+"""Utilities for the RW functionality paper,
+especially for classification"""
+
 from math import ceil, floor
 from tqdm import tqdm
 
@@ -11,15 +10,36 @@ import torch
 from torch import Tensor
 from torch.linalg import vector_norm
 import einops
-# from transformer_lens.utils import to_numpy
 
-CATEGORY_NAMES = [
-    "enrichment", "atypical enrichment", "conditional enrichment", "atypical conditional enrichment",
-    "proportional change", "atypical proportional change", "orthogonal output",
-    "depletion", "atypical depletion", "conditional depletion", "atypical conditional depletion"
-    ]
+STRENGTHENING = "strengthening"
+WEAKENING = "weakening"
 
-#the following function is largely copied from https://github.com/pytorch/pytorch/issues/157431#issuecomment-3026856373
+COMBO_TO_NAME = {
+    #keys are triples each of which represents, in order:
+    #. approx(cos(w_in,w_out)) (1 or 0 or -1),
+    #. |approx(cos(w_gate,w_out))| (1 or 0), 
+    #. approx(cos(w_gate,w_in))==approx(cos(w_gate,out))*approx(cos(w_in,w_out)) (1 or 0),
+    #   but 1 for orthogonal output.
+    (1,1,1): STRENGTHENING,
+    (1,1,0): f"atypical {STRENGTHENING}",
+    (1,0,1): f"conditional {STRENGTHENING}",
+    (1,0,0): f"atypical conditional {STRENGTHENING}", 
+    (0,1,1): "proportional change",
+    (0,1,0): "atypical proportional change",
+    (0,0,1): "orthogonal output",
+    (-1,1,1): WEAKENING,
+    (-1,1,0): f"atypical {WEAKENING}",
+    (-1,0,1): f"conditional {WEAKENING}",
+    (-1,0,0): f"atypical conditional {WEAKENING}",
+}
+
+def pretty_print(mydict):
+    for key, value in mydict.items():
+        assert key in COMBO_TO_NAME
+        print(f'{COMBO_TO_NAME[key]}: {value}')
+
+#the following function is largely copied from
+# https://github.com/pytorch/pytorch/issues/157431#issuecomment-3026856373
 def torch_quantile(  # noqa: PLR0913 (too many arguments)
     tensor: Tensor,
     q: float | Tensor,
@@ -51,7 +71,8 @@ def torch_quantile(  # noqa: PLR0913 (too many arguments)
     -----
     Uses ``torch.kthvalue``. Better than ``torch.quantile`` since:
 
-    #. it has no :math:`2^{24}` tensor `size limit <https://github.com/pytorch/pytorch/issues/64947#issuecomment-2304371451>`_;
+    #. it has no :math:`2^{24}` tensor `size limit
+    #   <https://github.com/pytorch/pytorch/issues/64947#issuecomment-2304371451>`_;
     #. it is much faster, at least on big tensor sizes.
 
     """
@@ -166,12 +187,14 @@ def neuron_analysis(model, layer, neuron, emb=None, k=64, verbose=True):
     return gatelin, gateout, linout, out_pos, out_neg, lin_pos, lin_neg, gate_pos, gate_neg
 
 def cos(v1,v2, pattern='... d, ... d -> ...'):
+    "batched cosine similarities"
     v1 /= vector_norm(v1, dim=-1, keepdim=True)
     v2 /= vector_norm(v2, dim=-1, keepdim=True)
     dot = einops.einsum(v1, v2, pattern)
     return dot
 
 def randomness_region(v1, v2, p=0.05, absolute=False):
+    """randomness region based on mismatched cosines, used in randomness_regions()"""
     l,n,_d = v1.shape
     if (l==1) or (n<8200):#TODO don't hardcode, this is a heuristic to avoid subsequent OOM errors
         mismatched_cos = cos(v1, v2, '... n1 d, ... n2 d -> ... n1 n2')
@@ -220,6 +243,23 @@ def _randomness_region(mismatched_cos, p=0.05, absolute=False):
     return torch.stack((low_quantile, high_quantile), dim=-1)#l 2
 
 def randomness_regions(mlp_weights, p=0.05):
+    """Returns a symmetrical randomness region for weight cosines
+    specific to the given MLP weights,
+    based on cosine similarities of mismatched weight vectors
+
+    Args:
+        mlp_weights (dict):
+            Keys are "W_gate", "W_in", "W_out",
+            values are the corresponding weight matrices (all in the same format)
+        p (float, optional): Significance level (between 0 and 1). Defaults to 0.05.
+
+    Returns:
+        dict with
+            keys "gatelin", "gateout", "linout"
+            and values tensors of shape (n_layers, 2),
+                where the 2 represents low and high quantiles (floats)
+    """
+    assert 0<=p<=1
     return {
         "gatelin": randomness_region(mlp_weights["W_gate"], mlp_weights["W_in"], p, absolute=True),
         "gateout": randomness_region(mlp_weights["W_gate"], mlp_weights["W_out"], p),
@@ -227,243 +267,46 @@ def randomness_regions(mlp_weights, p=0.05):
     }
 
 def beta_randomness_region(d, p=0.05):
+    """Returns a symmetrical randomness region
+    for cosine similarities of d-dimensional i.i.d Gaussian vectors,
+    for the given significance level p.
+
+    Args:
+        d (int): dimension (i.e., d_model)
+        p (float, optional): Significance level (between 0 and 1). Defaults to 0.05.
+
+    Returns:
+        float: low quantile
+        float: high quantile
+    """
+    assert 0<=p<=1
     rv = beta(a=(d-1)/2, b=(d-1)/2, loc=-1., scale=2.)
     low_quantile = rv.ppf(q=p/2).item()
     high_quantile = rv.ppf(q=1-p/2).item()
     #absolute_quantile = rv.ppf(q=1-p)
     return low_quantile, high_quantile#, absolute_quantile
 
-# def wcos_ax(ax, gateout, linout, gatelin, s=1):
-#     """
-#     gateout, linout, gatelin must be on cpu
-#     """
-#     ax.set_xlim(-1.,1.)
-#     ax.set_ylim(-1.,1.)
-#     scatter = ax.scatter(gateout, linout, c=gatelin,  vmin=-1., vmax=1., linewidths=0, s=s)
-#     return ax, scatter
+def _approx(x, threshold=.5):
+    ans = torch.where(x>threshold, 1,0)
+    ans = torch.where(x<-threshold, -1, ans)
+    if isinstance(x, float):
+        return ans.item()
+    return ans
 
-# def wcos_plot(gateout, linout, gatelin, title=None, filename=None, s=1):
-#     """
-#     gateout etc are either 1d tensors (neuron) or 2d (layer,neuron), or lists of 1d tensors
-#     """
-#     if type(gateout)==list or (gateout.ndim==2 and gateout.shape[0]!=1):
-#         if type(gateout)==list:
-#             n=len(gateout)
-#         else:
-#             n = gateout.shape[0]
-#         if n%4==0:
-#             nrows=n//4
-#             ncols=4
-#         else:
-#             nrows=n
-#             ncols=1
-#         fig, axs = plt.subplots(nrows,ncols, sharex=True, sharey=True)
-#         axs_list = axs.ravel().tolist()
-#         for layer in range(n):
-#             ax=axs_list[layer]
-#             ax, scatter = wcos_ax(ax, gateout[layer], linout[layer], gatelin[layer], s=s)
-#             ax.set_title(f"Layer {layer}")
-#     else:
-#         fig, ax = plt.subplots()
-#         axs_list = [ax]
-#         ax, scatter = wcos_ax(ax, gateout, linout, gatelin, s=s)
-#     fig.supxlabel("gate weights vs. output weights")
-#     fig.supylabel("linear input weights vs. output weights")
-#     fig.colorbar(scatter, ax=axs_list, label="gate vs. linear input weights")
-#     if title is not None:
-#         fig.suptitle(title)
-#     if filename is not None:
-#         fig.savefig(filename)
-#     #plt.close(fig)
-
-# def get_neuron_acts(model, text, layer, neuron_index, disentangle=True):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     # Hacky way to get out state from a single hook -
-#     # we have a single element list and edit that list within the hook.
-#     cache = {}
-#     def caching_hook(act, hook, name):
-#         cache[name] = act[0, :, neuron_index]
-#     fwd_hooks = [(f"blocks.{layer}.mlp.hook_post", partial(caching_hook, name="activation"))]
-#     if disentangle:
-#         fwd_hooks+=[
-#             (f"blocks.{layer}.mlp.hook_pre", partial(caching_hook, name="gate")),
-#             (f"blocks.{layer}.mlp.hook_pre_linear", partial(caching_hook, name="linear")),
-#         ]
-#     model.run_with_hooks(text, fwd_hooks=fwd_hooks)
-#     return to_numpy(cache["activation"]), to_numpy(cache["gate"]), to_numpy(cache["linear"])
-
-# def get_neuron_acts_on_dataset(model, layer, neuron, dataset, samples=None, seed=2512800, disentangle=True):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     """deprecated, use get_multiple_neuron_acts instead"""
-#     if samples is not None:
-#         random.seed(seed)
-#         sample = random.sample(range(len(dataset)), samples)
-#     else:
-#         sample = range(len(dataset))
-#     all_acts=[]
-#     if disentangle:
-#         all_gate = []
-#         all_lin = []
-#     for sample_index, ds_index in tqdm(enumerate(sample)):
-#         text = dataset[ds_index]['text']
-#         #try:
-#         if disentangle:
-#             acts, gate, lin = get_neuron_acts(model, text, layer, neuron, disentangle=True)
-#         else:
-#             acts = get_neuron_acts(model, text, layer, neuron, disentangle=False)
-#         # except:
-#         #     acts = []
-#         #     gate = []
-#         #     lin = []
-#         all_acts.append(acts)
-#         if disentangle:
-#             all_gate.append(gate)
-#             all_lin.append(lin)
-#     if disentangle:
-#         return sample, all_acts, all_gate, all_lin
-#     return sample, all_acts
-
-# def get_multiple_neuron_acts(model, text, layer_neuron_dict, disentangle=True):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     cache = {
-#         "activation":{},
-#         "gate":{},
-#         "linear":{},
-#     }
-#     def caching_hook(act, hook, name, layer, neuron_list):
-#         for ln in neuron_list:
-#             cache[name][(layer,ln)] = to_numpy(act[0, :, ln])
-#     fwd_hooks = [
-#         (f"blocks.{layer}.mlp.hook_post", partial(caching_hook, name="activation", layer=layer, neuron_list=layer_neuron_dict[layer]))
-#         for layer in layer_neuron_dict
-#         ]
-#     if disentangle:
-#         fwd_hooks+=[
-#             (f"blocks.{layer}.mlp.hook_pre", partial(caching_hook, name="gate", layer=layer, neuron_list=layer_neuron_dict[layer]))
-#             for layer in layer_neuron_dict
-#             ] + [
-#                 (f"blocks.{layer}.mlp.hook_pre_linear", partial(caching_hook, name="linear", layer=layer, neuron_list=layer_neuron_dict[layer]))
-#                 for layer in layer_neuron_dict
-#                 ]
-#     #print(fwd_hooks)
-#     model.run_with_hooks(text, fwd_hooks=fwd_hooks)
-#     #print(cache)
-#     return cache
-
-# def get_multiple_neuron_acts_on_dataset(model, neuron_list, dataset, samples=None, seed=2512800, disentangle=False):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     if samples is not None:
-#         random.seed(seed)
-#         sample = random.sample(range(len(dataset)), samples)
-#     else:
-#         sample = range(len(dataset))
-
-#     layer_neuron_dict = {l:[] for l in range(32)}#very hacky
-#     for layer,neuron in neuron_list:
-#         layer_neuron_dict[layer].append(neuron)
-#     # for layer in layer_neuron_dict:
-#     #     if not layer_neuron_dict[layer]:
-#     #         del layer_neuron_dict[layer]
-
-#     all_acts = {ln:[] for ln in neuron_list}
-#     all_gate = {ln:[] for ln in neuron_list}
-#     all_lin = {ln:[] for ln in neuron_list}
-#     for sample_index, ds_index in tqdm(enumerate(sample)):
-#         text = dataset[ds_index]['text']
-#         cache = get_multiple_neuron_acts(model, text, layer_neuron_dict, disentangle=disentangle)
-#         #cache should be a dict with "activation", "gate", "lin" as keys,
-#         # and each of the values is a dict with keys (layer,neuron).
-#         #assert (4,7696) in cache["activation"]
-#         for ln in neuron_list:
-#             all_acts[ln].append(cache["activation"][ln])
-#             all_gate[ln].append(cache["gate"][ln])
-#             all_lin[ln].append(cache["linear"][ln])
-#         # del acts
-#         # gc.collect()
-#         # torch.cuda.empty_cache()
-#     return sample, all_acts, all_gate, all_lin
-
-# def find_examples(all_acts, cutoff=0.5):
-#     """
-#     Don't use this!
-#     It typically finds way too many examples and then the files are impossible to open.
-#     """
-#     max_val = 0
-#     min_val = 0
-#     for acts in all_acts:
-#         if any(acts > max_val):
-#             max_val = max(acts)
-#         if any(acts < min_val):
-#             min_val = min(acts)
-#     max_vals = []
-#     min_vals = []
-#     for sample_index, acts in enumerate(all_acts):
-#         act_argmax = acts.argmax()
-#         act_argmin = acts.argmin()
-#         if acts[act_argmax] >= cutoff*max_val:
-#             max_vals.append((sample_index, act_argmax))
-#         if acts[act_argmin] <= cutoff*min_val:
-#             min_vals.append((sample_index, act_argmin))
-#     max_vals = [x for x in sorted(max_vals, key=lambda pair: -all_acts[pair[0]][pair[1]])]
-#     min_vals = [x for x in sorted(min_vals, key=lambda pair: all_acts[pair[0]][pair[1]])]
-#     return max_val, min_val, max_vals, min_vals
-
-# STYLE_STRING = """<style> 
-#     span.token {
-#         border: 1px solid rgb(123, 123, 123)
-#         } 
-#     </style>"""
-
-# def calculate_color(val, max_val, min_val, color="red"):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     # Hacky code that takes in a value val in range [min_val, max_val], normalizes it to [0, 1]
-#     # and returns a color which interpolates between slightly off-white and red (0 = white, 1 = red)
-#     # We return a string of the form "rgb(240, 240, 240)" which is a color CSS knows
-#     normalized_val = (val - min_val) / max_val
-#     if color=="green":
-#         return f"rgb({240*(1-normalized_val)}, 240, {240*(1-normalized_val)})"
-#     elif color=="red":
-#         return f"rgb(240, {240*(1-normalized_val)}, {240*(1-normalized_val)})"
-
-# def neuron_vis(model, dataset, sample, sample_index, all_acts, layer, neuron_index, max_val=None, min_val=None, color="red"):
-#     #https://colab.research.google.com/github/neelnanda-io/TransformerLens/blob/main/demos/Interactive_Neuroscope.ipynb
-#     text = dataset[sample[sample_index]]['text']
-#     str_tokens = model.to_str_tokens(text)
-#     acts = all_acts[sample_index]
-
-#     act_max = acts.max()
-#     act_min = acts.min()
-#     # Defaults to the max and min of the activations
-#     if max_val is None:
-#         max_val = act_max
-#     if min_val is None:
-#         min_val = act_min
-#     # We want to make a list of HTML strings to concatenate into our final HTML string
-#     # We first add the style to make each token element have a nice border
-#     htmls = [STYLE_STRING]
-#     # We then add some text to tell us what layer and neuron we're looking at -
-#     # we're just dealing with strings and can use f-strings as normal
-#     # h4 means "small heading"
-#     htmls.append(f"<h4>Layer: <b>{layer}</b>. Neuron Index: <b>{neuron_index}</b></h4>")
-#     # We then add a line telling us the limits of our range
-#     htmls.append(
-#         f"<h4>Max Range: <b>{max_val:.4f}</b>. Min Range: <b>{min_val:.4f}</b></h4>"
-#     )
-#     # If we added a custom range, print a line telling us the range of our activations too.
-#     if act_max != max_val or act_min != min_val:
-#         htmls.append(
-#             f"<h4>Custom Range Set. Max Act: <b>{act_max:.4f}</b>. Min Act: <b>{act_min:.4f}</b></h4>"
-#         )
-#     for tok, act in zip(str_tokens, acts):
-#         # A span is an HTML element that lets us style a part of a string
-#         # (and remains on the same line by default)
-#         # We set the background color of the span to be the color we calculated from the activation
-#         # We set the contents of the span to be the token
-#         htmls.append(
-#             f"<span class='token' style='background-color:{calculate_color(act, max_val, min_val, color=color)};color:black' >{tok}</span>"
-#         )
-
-#     return "".join(htmls)
+def compute_category(linout, gateout, gatelin, threshold=.5):
+    """Computes the category of the given neurons,
+    in the triple format of COMBO_TO_NAME.
+    If args are floats: returns a triple
+    If args are tensors (of shape (layer,neuron)): Returns tensor of shape (layer, neuron, 3)
+    """
+    approx_linout = _approx(linout, threshold)
+    approx_gateout = _approx(gateout, threshold)
+    typical = torch.where(_approx(gatelin, threshold)==approx_linout*approx_gateout, 1, 0)
+    typical = torch.where(approx_linout==0 & approx_gateout==0, 1, typical)
+    answer = (approx_linout, torch.abs(approx_gateout), typical)
+    if isinstance(linout, torch.Tensor):
+        return torch.stack(answer, dim=-1)
+    return answer
 
 def count_categories(indices, gatelin, gateout, linout, threshold=.5):
     """
@@ -472,183 +315,209 @@ def count_categories(indices, gatelin, gateout, linout, threshold=.5):
     If you have already done categories(),
     read everything off from the output tensor of that function.
     """
-    d = 0
-    cd = 0
-    oo = 0
-    pc = 0
-    ce = 0
-    e = 0
-    other_d = 0
-    other_cd = 0
-    other_pc = 0
-    other_ce = 0
-    other_e = 0
+    # d = 0
+    # cd = 0
+    # oo = 0
+    # pc = 0
+    # ce = 0
+    # e = 0
+    # other_d = 0
+    # other_cd = 0
+    # other_pc = 0
+    # other_ce = 0
+    # other_e = 0
+    answer = {key:0 for key in COMBO_TO_NAME}
 
-    for ln in indices:
-        l = ln[0]
-        n = ln[1]
-        if linout[l][n]<-threshold:
-            if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
-                if torch.copysign(gatelin[l][n], gateout[l][n])<-threshold:
-                    d+=1
-                else:
-                    other_d+=1
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    cd+=1
-                else:
-                    other_cd+=1
-        elif linout[l][n]>threshold:
-            if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
-                if torch.copysign(gatelin[l][n], gateout[l][n])>threshold:
-                    e+=1
-                else:
-                    other_e+=1
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    ce+=1
-                else:
-                    other_ce+=1
-        else:
-            if gateout[l][n]>-threshold and gateout[l][n]<threshold:
-                oo+=1
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    pc+=1
-                else:
-                    other_pc+=1
-    return {"depletion": d,
-            "atypical depletion": other_d,
-            "conditional depletion": cd,
-            "atypical conditional depletion": other_cd,
-            "orthogonal output": oo,
-            "proportional change": pc,
-            "atypical proportional change": other_pc,
-            "conditional enrichment": ce,
-            "atypical conditional enrichment": other_ce,
-            "enrichment": e,
-            "atypical enrichment": other_e}
+    for l,n in indices:
+        category = compute_category(linout[l][n], gateout[l][n], gatelin[l][n], threshold)
+        answer[category] +=1
+    return answer
+    #     if linout[l][n]<-threshold:
+    #         if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
+    #             if torch.copysign(gatelin[l][n], gateout[l][n])<-threshold:
+    #                 d+=1
+    #             else:
+    #                 other_d+=1
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 cd+=1
+    #             else:
+    #                 other_cd+=1
+    #     elif linout[l][n]>threshold:
+    #         if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
+    #             if torch.copysign(gatelin[l][n], gateout[l][n])>threshold:
+    #                 e+=1
+    #             else:
+    #                 other_e+=1
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 ce+=1
+    #             else:
+    #                 other_ce+=1
+    #     else:
+    #         if gateout[l][n]>-threshold and gateout[l][n]<threshold:
+    #             oo+=1
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 pc+=1
+    #             else:
+    #                 other_pc+=1
+    # return {"depletion": d,
+    #         "atypical depletion": other_d,
+    #         "conditional depletion": cd,
+    #         "atypical conditional depletion": other_cd,
+    #         "orthogonal output": oo,
+    #         "proportional change": pc,
+    #         "atypical proportional change": other_pc,
+    #         "conditional enrichment": ce,
+    #         "atypical conditional enrichment": other_ce,
+    #         "enrichment": e,
+    #         "atypical enrichment": other_e}
 
-def category_lists(indices, gatelin, gateout, linout, threshold=.5, atypical=False):
+def category_lists(indices, gatelin, gateout, linout, threshold=.5):
     """
     Use this only for a small list of indices.
     To list all categories, use categories().
     If you have already done that,
     you can just read everything off from the output tensor of categories().
     """
-    d = []
-    cd = []
-    oo = []
-    pc = []
-    ce = []
-    e = []
-    if atypical:
-        other_d = []
-        other_cd = []
-        other_pc = []
-        other_ce = []
-        other_e = []
+    answer = {key:[] for key in COMBO_TO_NAME}
+    for l,n in indices:
+        category = compute_category(linout[l][n], gateout[l][n], gatelin[l][n], threshold)
+        answer[category].append((l,n))
+    return answer
+    # d = []
+    # cd = []
+    # oo = []
+    # pc = []
+    # ce = []
+    # e = []
+    # if atypical:
+    #     other_d = []
+    #     other_cd = []
+    #     other_pc = []
+    #     other_ce = []
+    #     other_e = []
 
-    for ln in indices:
-        l = ln[0]
-        n = ln[1]
-        if linout[l][n]<-threshold:
-            if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
-                if torch.copysign(gatelin[l][n], gateout[l][n])<-threshold:
-                    d.append((l,n))
-                elif atypical:
-                    other_d.append((l,n))
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    cd.append((l,n))
-                elif atypical:
-                    other_cd.append((l,n))
-        elif linout[l][n]>threshold:
-            if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
-                if torch.copysign(gatelin[l][n], gateout[l][n])>threshold:
-                    e.append((l,n))
-                elif atypical:
-                    other_e.append((l,n))
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    ce.append((l,n))
-                elif atypical:
-                    other_ce.append((l,n))
-        else:
-            if gateout[l][n]>-threshold and gateout[l][n]<threshold:
-                oo.append((l,n))
-            else:
-                if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
-                    pc.append((l,n))
-                elif atypical:
-                    other_pc.append((l,n))
+    # for ln in indices:
+    #     l = ln[0]
+    #     n = ln[1]
+    #     if linout[l][n]<-threshold:
+    #         if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
+    #             if torch.copysign(gatelin[l][n], gateout[l][n])<-threshold:
+    #                 d.append((l,n))
+    #             elif atypical:
+    #                 other_d.append((l,n))
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 cd.append((l,n))
+    #             elif atypical:
+    #                 other_cd.append((l,n))
+    #     elif linout[l][n]>threshold:
+    #         if (gateout[l][n]<-threshold) or (gateout[l][n]>threshold):
+    #             if torch.copysign(gatelin[l][n], gateout[l][n])>threshold:
+    #                 e.append((l,n))
+    #             elif atypical:
+    #                 other_e.append((l,n))
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 ce.append((l,n))
+    #             elif atypical:
+    #                 other_ce.append((l,n))
+    #     else:
+    #         if gateout[l][n]>-threshold and gateout[l][n]<threshold:
+    #             oo.append((l,n))
+    #         else:
+    #             if gatelin[l][n]>-threshold and gatelin[l][n]<threshold:
+    #                 pc.append((l,n))
+    #             elif atypical:
+    #                 other_pc.append((l,n))
 
-    ans = {"depletion": d,
-            "conditional depletion": cd,
-            "orthogonal output": oo,
-            "proportional change": pc,
-            "conditional enrichment": ce,
-            "enrichment": e,
-    }
-    if atypical:
-        ans["atypical depletion"] = other_d
-        ans["atypical conditional depletion"] = other_cd
-        ans["atypical proportional change"] = other_pc
-        ans["atypical conditional enrichment"] = other_ce
-        ans["atypical enrichment"] = other_e
+    # ans = {"depletion": d,
+    #         "conditional depletion": cd,
+    #         "orthogonal output": oo,
+    #         "proportional change": pc,
+    #         "conditional enrichment": ce,
+    #         "enrichment": e,
+    # }
+    # if atypical:
+    #     ans["atypical depletion"] = other_d
+    #     ans["atypical conditional depletion"] = other_cd
+    #     ans["atypical proportional change"] = other_pc
+    #     ans["atypical conditional enrichment"] = other_ce
+    #     ans["atypical enrichment"] = other_e
 
-    return ans
+    # return ans
 
-def categories(gatelin, gateout, linout, threshold=.5):
-    """Returns tensor of shape (layer, neuron)
-    with integers indicating the category of the corresponding neuron,
-    following CATEGORY_NAMES"""
-    category_tensor = torch.full_like(gatelin, 6) #category_names[6]==orthogonal output
-    category_tensor[(linout>threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.copysign(gatelin, gateout)>threshold)] = 0 #enrichment
-    category_tensor[(linout>threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.copysign(gatelin, gateout)<=threshold)] = 1#'atypical enrichment'
-    category_tensor[(linout>threshold) &
-            (torch.abs(gateout)<=threshold) &
-            (torch.abs(gatelin)<=threshold)] = 2#'conditional enrichment'
-    category_tensor[(linout>threshold) &
-            (torch.abs(gateout)<=threshold) &
-            (torch.abs(gatelin)>threshold)] = 3#'atypical conditional enrichment'
-    category_tensor[(torch.abs(linout)<=threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.abs(gatelin)<=threshold)] = 4#'proportional change'
-    category_tensor[(torch.abs(linout)<=threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.abs(gatelin)>threshold)] = 5#'atypical proportional change'
-    category_tensor[(linout<-threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.copysign(gatelin, gateout)<-threshold)] = 7#'depletion'
-    category_tensor[(linout<-threshold) &
-            (torch.abs(gateout)>threshold) &
-            (torch.copysign(gatelin, gateout)>=-threshold)] = 8#'atypical depletion'
-    category_tensor[(linout<-threshold) &
-            (torch.abs(gateout)<=threshold) &
-            (torch.abs(gatelin)<=threshold)] = 9#'conditional depletion'
-    category_tensor[(linout<-threshold) &
-            (torch.abs(gateout)<=threshold) &
-            (torch.abs(gatelin)>threshold)] = 10#'atypical conditional depletion'
-    return category_tensor
+# def categories(gatelin, gateout, linout, threshold=.5):
+#     """Returns tensor of shape (layer, neuron, 3)
+#     with integers indicating the category of the corresponding neuron,
+#     following COMBO_TO_NAME"""
+    #category_tensor = torch.full_like(gatelin, 6) #category_names[6]==orthogonal output
+    # category_tensor[(linout>threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.copysign(gatelin, gateout)>threshold)] = 0 #enrichment
+    # category_tensor[(linout>threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.copysign(gatelin, gateout)<=threshold)] = 1#'atypical enrichment'
+    # category_tensor[(linout>threshold) &
+    #         (torch.abs(gateout)<=threshold) &
+    #         (torch.abs(gatelin)<=threshold)] = 2#'conditional enrichment'
+    # category_tensor[(linout>threshold) &
+    #         (torch.abs(gateout)<=threshold) &
+    #         (torch.abs(gatelin)>threshold)] = 3#'atypical conditional enrichment'
+    # category_tensor[(torch.abs(linout)<=threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.abs(gatelin)<=threshold)] = 4#'proportional change'
+    # category_tensor[(torch.abs(linout)<=threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.abs(gatelin)>threshold)] = 5#'atypical proportional change'
+    # category_tensor[(linout<-threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.copysign(gatelin, gateout)<-threshold)] = 7#'depletion'
+    # category_tensor[(linout<-threshold) &
+    #         (torch.abs(gateout)>threshold) &
+    #         (torch.copysign(gatelin, gateout)>=-threshold)] = 8#'atypical depletion'
+    # category_tensor[(linout<-threshold) &
+    #         (torch.abs(gateout)<=threshold) &
+    #         (torch.abs(gatelin)<=threshold)] = 9#'conditional depletion'
+    # category_tensor[(linout<-threshold) &
+    #         (torch.abs(gateout)<=threshold) &
+    #         (torch.abs(gatelin)>threshold)] = 10#'atypical conditional depletion'
+    # return category_tensor
 
-def count_categories_all(category_tensor):
-    """Output:
-    dict with
-    keys: strings corresponding to layers: '0', '1', etc.
-    values: list of number of neurons (in that layer) for each class,
-    where classes are ordered as in CATEGORY_NAMES
+def layerwise_count(category_tensor):
+    """count how often each category appears per layer
+
+    Args:
+        category_tensor (tensor): output of compute_category
+
+    Returns:
+        dict with
+            keys: as in COMBO_TO_NAME
+            values: tensors of shape (layer),
+            indicating the number of times the category appears in each layer
     """
-    results = {str(l):[] for l in range(category_tensor.shape[0])}
-    for i in range(len(CATEGORY_NAMES)):
-        entry = torch.count_nonzero(category_tensor==i, dim=1)
-        for l in range(category_tensor.shape[0]):
-            results[str(l)].append(entry[l])
+    results = {key:torch.zeros(category_tensor.shape[0]) for key in COMBO_TO_NAME}
+    for key in COMBO_TO_NAME:
+        key_tensor = torch.tensor(key)
+        eq = category_tensor==key_tensor
+        results[key] = torch.count_nonzero(eq.all(), dim=1)
     return results
+
+# def count_categories_all(category_tensor):
+#     """Output:
+#     dict with
+#     keys: strings corresponding to layers: '0', '1', etc.
+#     values: list of number of neurons (in that layer) for each class,
+#     where classes are ordered as in CATEGORY_NAMES
+#     """
+#     results = {str(l):[] for l in range(category_tensor.shape[0])}
+#     for i in range(len(CATEGORY_NAMES)):
+#         entry = torch.count_nonzero(category_tensor==i, dim=1)
+#         for l in range(category_tensor.shape[0]):
+#             results[str(l)].append(entry[l])
+#     return results
 
 # def gather_class_changes(all_data, checkpoint_names=None):
 #     """

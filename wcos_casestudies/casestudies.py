@@ -32,7 +32,7 @@ torch.set_grad_enabled(False)
 pd.set_option('display.max_rows', None)
 
 # %%
-MODEL_NAME = "allenai/OLMo-7B-0424-hf" #Not supported by the original TransformerLens!
+MODEL_NAME = "allenai/OLMo-7B-0424-hf"
 REFACTOR_GLU = True
 WORK_DIR = "/mounts/work/sgerstner" #TODO
 
@@ -310,27 +310,27 @@ torch.save([ad_indices, scores_to_save], f'{PATH}/attention.pt')
 # %%
 print("Partition:")
 part_io = utils.count_categories(p_indices_readable, gatelin, gateout, linout)
-print(part_io)
+utils.pretty_print(part_io)
 
 # %%
 print("Prediction:")
 pred_io = utils.count_categories(pred_indices, gatelin, gateout, linout)
-print(pred_io)
+utils.pretty_print(pred_io)
 
 # %%
 print("Suppression:")
 supp_io = utils.count_categories(supp_indices, gatelin, gateout, linout)
-print(supp_io)
+utils.pretty_print(supp_io)
 
 # %%
 print("Entropy:")
 ent_io = utils.count_categories(entropy_indices, gatelin, gateout, linout)
-print(ent_io)
+utils.pretty_print(ent_io)
 
 # %%
 print("Attention deactivation:")
 ad_io = utils.count_categories(ad_indices[:4,:], gatelin, gateout, linout)
-print(ad_io)
+utils.pretty_print(ad_io)
 
 # %%
 with open("contingency.json", 'w', encoding='utf-8') as f:
@@ -382,7 +382,7 @@ for key, value in pred_classes.items():
             best_index = (layer,neuron)
             max_kurt = kurtoses[layer,neuron]
     print(f"clearest prediction neuron in class {key}: {best_index} with kurtosis {max_kurt}")
-    if key not in ["depletion", "orthogonal output"]:
+    if key not in [(-1,1,1), (0,0,1)]:#weakening, orthogonal output
         neuron_list.append(best_index)
 
 # %%
