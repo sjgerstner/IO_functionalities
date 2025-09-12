@@ -38,6 +38,7 @@ CATEGORY_COLORS = {
     )
     for key in COMBO_TO_NAME
 }
+CATEGORY_COLORS[(0,0,1)]=(0.9,0.9,0.9,1)
 
 NICKNAME_TO_FORMULA = {
     "gatelin":"$cos(w_{gate}, w_{in})$",
@@ -65,8 +66,9 @@ def my_survey(
     #my preprocessing:
     # labels = list(results.keys())
     # data = np.array(list(results.values()))
-    labels = list(range(results[(1,1,1)].shape))#['0',...,'31'] if 32 layers
-    data = np.array(torch.stack(results.values(), dim=-1))
+    labels = list(range(results[(1,1,1)].numel()))#[0,...,31] if 32 layers
+    labels = [f'Layer {n}' for n in labels]
+    data = np.array(torch.stack(list(results.values()), dim=-1).cpu())
 
     data_cum = data.cumsum(axis=1)#cumsum over categories
 

@@ -81,7 +81,7 @@ def cosines(mlp_weights):
     data = {"gatelin":gatelin, "linout":linout, "gateout":gateout, "d_model":mlp_weights["d_model"]}
     return data
 
-def _get_cosine_data(args, model_name, path, cache_dir=None, checkpoint_value=None):
+def _get_cosine_data(path, model_data):
     """load and/or compute cosine data"""
     data_file = f"{path}/data.pt"
     if os.path.exists(data_file):
@@ -97,14 +97,9 @@ def _get_cosine_data(args, model_name, path, cache_dir=None, checkpoint_value=No
         # except RuntimeError as e:
         #     print(f"Ignoring error when loading pickle, recomputing data: {e}")
     else:
-        model_data = _load_model_data(
-            model_name,
-            cache_dir=cache_dir, checkpoint_value=checkpoint_value,
-            refactor_glu=args.refactor_glu,
-        )
         print("computing cosines")
         data = cosines(model_data)
-    return model_data, data
+    return data
 
 def _get_advanced_data(args, model_data, data, model_name, path, checkpoint_value=None):
     """load and/or compute advanced data"""
@@ -186,6 +181,11 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
     """General function
     that computes weight cosines of the given model
     and then does the analyses specified in the args"""
+    model_data = _load_model_data(
+        model_name,
+        cache_dir=cache_dir, checkpoint_value=checkpoint_value,
+        refactor_glu=args.refactor_glu,
+    )#TODO only when needed
     #path
     path = f"{args.work_dir}/results/{model_name}"
     if args.refactor_glu:
@@ -197,8 +197,8 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
 
     #load and/or compute data and save it
     #cosines
-    model_data, data = _get_cosine_data(
-        args, model_name, path, cache_dir=cache_dir, checkpoint_value=checkpoint_value
+    data = _get_cosine_data(
+        path, model_data
     )
     #advanced
     data = _get_advanced_data(

@@ -302,7 +302,7 @@ def compute_category(linout, gateout, gatelin, threshold=.5):
     approx_linout = _approx(linout, threshold)
     approx_gateout = _approx(gateout, threshold)
     typical = torch.where(_approx(gatelin, threshold)==approx_linout*approx_gateout, 1, 0)
-    typical = torch.where(approx_linout==0 & approx_gateout==0, 1, typical)
+    typical = torch.where((approx_linout==0) & (approx_gateout==0), 1, typical)
     answer = (approx_linout, torch.abs(approx_gateout), typical)
     if isinstance(linout, torch.Tensor):
         return torch.stack(answer, dim=-1)
@@ -486,11 +486,12 @@ def category_lists(indices, gatelin, gateout, linout, threshold=.5):
     #         (torch.abs(gatelin)>threshold)] = 10#'atypical conditional depletion'
     # return category_tensor
 
-def layerwise_count(category_tensor):
+def layerwise_count(category_tensor:torch.Tensor):
     """count how often each category appears per layer
 
     Args:
-        category_tensor (tensor): output of compute_category
+        category_tensor (tensor): output of compute_category,
+            shape (layer, neuron, 3)
 
     Returns:
         dict with
@@ -500,9 +501,9 @@ def layerwise_count(category_tensor):
     """
     results = {key:torch.zeros(category_tensor.shape[0]) for key in COMBO_TO_NAME}
     for key in COMBO_TO_NAME:
-        key_tensor = torch.tensor(key)
+        key_tensor = torch.tensor(key).to(category_tensor.device)
         eq = category_tensor==key_tensor
-        results[key] = torch.count_nonzero(eq.all(), dim=1)
+        results[key] = torch.count_nonzero(eq.all(dim=-1), dim=1)
     return results
 
 # def count_categories_all(category_tensor):
