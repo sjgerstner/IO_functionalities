@@ -300,8 +300,11 @@ def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
     ax.plot(data[x], m*data[x] + b, color='red', lw=0.8,alpha=0.8, label=f'corr: {corr:.2f}')
     ax.legend(loc='upper right', fontsize='small')
 
-    ax.set_ylim(-1, 1)#TODO should be (0,1) in some cases
     ax.set_xlim(-0.02, 1)
+    if (data[y]>=0).all():
+        ax.set_ylim(0,1)
+    else:
+        ax.set_ylim(-1, 1)
     ax.grid(alpha=0.3, linestyle='--')
 
     return ax
