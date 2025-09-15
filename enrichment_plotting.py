@@ -49,7 +49,7 @@ for name in all_subset_names:
         (tmp.top_k_preds_in_context > -1) &
         (tmp.neuron_subset_name.isin([name, name+'_baseline', 'clean']))
     ]
-    plot_dir = f'plots/{name}'
+    plot_dir = f'{args.work_dir}/plots/ablations/{name}'
     if os.path.exists(plot_dir):
         #TODO continue?
         pass

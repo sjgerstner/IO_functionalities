@@ -52,7 +52,7 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
         (diffs[name], diffs[name+'_baseline']) for name in neuron_subset_names
     ))
     subtitles = list(chain.from_iterable((name, name+'_baseline') for name in neuron_subset_names))
-    experiment_dir = f'plots/{args.experiment_name}'
+    experiment_dir = f'{args.plot_dir}/{args.experiment_name}'
     if not os.path.exists(experiment_dir):
         os.mkdir(experiment_dir)
     if args.log:
@@ -71,6 +71,7 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
 if __name__=='__main__':
     parser = ArgumentParser()
     parser.add_argument('--data_dir')
+    parser.add_argument('--plot_dir')
     parser.add_argument('--experiment_name', type=str)
     parser.add_argument('--model', default='allenai/OLMo-7B-0424-hf')
     parser.add_argument('--dataset', default='dolma_small')
