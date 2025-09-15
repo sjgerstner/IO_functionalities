@@ -32,6 +32,7 @@ COMBO_TO_NAME = {
     (-1,0,1): f"conditional {WEAKENING}",
     (-1,0,0): f"atypical conditional {WEAKENING}",
 }
+NAME_TO_COMBO = {v:k for k,v in COMBO_TO_NAME.items()}
 
 def pretty_print(mydict):
     for key, value in mydict.items():

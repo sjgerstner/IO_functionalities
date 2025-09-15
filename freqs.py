@@ -47,7 +47,7 @@ if "layer_plots" in subexps:#not os.path.exists(LAYER_PATH):
         [str(i) for i in range(n_layers)],
         f"{args.metric} by layer in {args.model}",
         LAYER_PATH,
-        xlabel=SHORT_TO_LONG[args.metric]
+        xlabel=SHORT_TO_LONG[args.metric],
         ncols=4,
         log=args.log,
         weighted=True,
@@ -69,9 +69,9 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
             list(chain.from_iterable(
                 (name, name+'_baseline') for name in neuron_choice.CATEGORY_NAMES
             )),
-            f"{args.metric} of neurons in {args.model}",
-            CATEGORY_PATH,
-            xlabel=SHORT_TO_LONG[args.metric]
+            savefile=CATEGORY_PATH,
+            suptitle=f"{args.metric} of neurons in {args.model}",
+            xlabel=SHORT_TO_LONG[args.metric],
             ncols=2,
             log=args.log,
             weighted=True

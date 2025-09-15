@@ -7,7 +7,7 @@ from transformer_lens import HookedTransformer
 
 from entropy_intervention import run_intervention_experiment
 from neuron_choice import neuron_choice
-from utils import COMBO_TO_NAME
+from utils import NAME_TO_COMBO
 
 def run_with_baseline(
     args,
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--neuron_subset_name', default='baseline',
-        help="'baseline' or one of the names (!) in utils.COMBO_TO_NAME"
+        help="'baseline' or one of the names in NAME_TO_COMBO"
     )
     parser.add_argument(
         '--n_neurons', default=None,
@@ -151,9 +151,7 @@ if __name__ == '__main__':
         subset = float(args.n_neurons) if '.' in args.n_neurons else int(args.n_neurons)
         neuron_list, random_baseline = neuron_choice(
             args,
-            category_key=next(
-                k for k, v in COMBO_TO_NAME.items() if v == args.neuron_subset_name
-            ),
+            category_key=NAME_TO_COMBO[args.neuron_subset_name],
             subset=subset,
         )
 

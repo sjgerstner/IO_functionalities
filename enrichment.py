@@ -26,6 +26,7 @@ from enrichment_utils import (
     decode_tokens,
 )
 from neuron_choice import neuron_choice
+from utils import NAME_TO_COMBO
 
 if __name__=="__main__":
     parser = ArgumentParser()
@@ -49,7 +50,9 @@ if __name__=="__main__":
         help="""a metric for activation frequency, to adapt the number of neurons to ablate
         (ablate more neurons for less frequently activated classes)"""
     )
-    parser.add_argument('--constant_class', default='depletion', help="The class from which to ablate n_neurons")
+    parser.add_argument(
+        '--constant_class', default='depletion', help="The class from which to ablate n_neurons"
+    )
     parser.add_argument(
         '--subsets',
         nargs='+',
@@ -154,7 +157,7 @@ if __name__=="__main__":
             #TODO number of neurons to ablate from this class
             #create neuron subsets
             nice_subset, random_subset = neuron_choice(
-                args, subset_name, subset=N_NEURONS#TODO
+                args, NAME_TO_COMBO[subset_name], subset=N_NEURONS#TODO
             )
             # Projection of token representations while applying knockouts to enrichment neurons
             if test1:

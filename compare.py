@@ -60,8 +60,8 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
     aligned_histograms(
         list_data,
         subtitles=subtitles,
-        suptitle = '',#f'{absrel} effect of neurons on {metric},\nas measured by {intervention_type}',TODO
         savefile=f'{experiment_dir}/{metric}.pdf',
+        suptitle = None,#f'{absrel} effect of neurons on {metric},\nas measured by {intervention_type}',
         xlabel=f'{metric}(clean) {absrel} {metric}(ablated)',
         ncols = 2,
         **kwargs
