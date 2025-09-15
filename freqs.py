@@ -9,7 +9,7 @@ from pandas.io.formats.style import Styler
 import torch
 
 import neuron_choice
-import plotting
+from plotting import SHORT_TO_LONG, aligned_histograms, freq_sim_scatter
 
 parser = ArgumentParser()
 parser.add_argument('--work_dir', default=None)
@@ -42,11 +42,12 @@ os.makedirs(PLOT_DIR, exist_ok=True)
 #plotting by layer
 LAYER_PATH = f'{PLOT_DIR}/{args.metric}_layers_{args.log}.pdf'
 if "layer_plots" in subexps:#not os.path.exists(LAYER_PATH):
-    plotting.aligned_histograms(
+    aligned_histograms(
         [list(freq_tensor[layer]) for layer in range(n_layers)],
         [str(i) for i in range(n_layers)],
         f"{args.metric} by layer in {args.model}",
         LAYER_PATH,
+        xlabel=SHORT_TO_LONG[args.metric]
         ncols=4,
         log=args.log,
         weighted=True,
@@ -63,13 +64,14 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
         my_data.append([freq_tensor[index].item() for index in baseline_list])
 
     if "category_plots" in subexps:
-        plotting.aligned_histograms(
+        aligned_histograms(
             my_data,
             list(chain.from_iterable(
                 (name, name+'_baseline') for name in neuron_choice.CATEGORY_NAMES
             )),
             f"{args.metric} of neurons in {args.model}",
             CATEGORY_PATH,
+            xlabel=SHORT_TO_LONG[args.metric]
             ncols=2,
             log=args.log,
             weighted=True
@@ -133,19 +135,19 @@ if "scatter_plots" in subexps or "selected" in subexps:
     NCOLS = 4
     if "scatter_plots" in subexps:
         for sim in SIMS:
-            plotting.freq_sim_scatter(
+            freq_sim_scatter(
                 data_by_layer,
                 (args.metric, sim),
                 (int(np.ceil(n_layers/NCOLS)), NCOLS),
-                f"{args.metric} vs. {sim} in {args.model}",
-                f'{PLOT_DIR}/{args.metric}_{sim}.pdf'
+                suptitle = f"{SHORT_TO_LONG[args.metric]} vs. {SHORT_TO_LONG["linout"]} in {args.model}",
+                savefile=f'{PLOT_DIR}/{args.metric}_{sim}.pdf'
             )
     if "selected" in subexps:
-        plotting.freq_sim_scatter(
+        freq_sim_scatter(
             data_by_layer,
             (args.metric, "linout"),
             arrangement = (1, len(args.layer_list)),
-            suptitle = f"{plotting.SHORT_TO_LONG[args.metric]} vs. {plotting.SHORT_TO_LONG["linout"]} in {args.model}",
+            suptitle = f"{SHORT_TO_LONG[args.metric]} vs. {SHORT_TO_LONG["linout"]} in {args.model}",
             savefile = f'{PLOT_DIR}/{args.metric}_linout_selected.pdf',
             layer_list=args.layer_list,
         )
