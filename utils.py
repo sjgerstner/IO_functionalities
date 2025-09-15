@@ -486,6 +486,20 @@ def category_lists(indices, gatelin, gateout, linout, threshold=.5):
     #         (torch.abs(gatelin)>threshold)] = 10#'atypical conditional depletion'
     # return category_tensor
 
+def is_in_category(category_tensor, category_key):
+    """Return a tensor of booleans indicating for each neuron if it belongs to the given category
+
+    Args:
+        category_tensor (tensor): output of compute_category, shape (layer, neuron, 3)
+        category_key (tuple): one of the keys of COMBO_TO_NAME
+
+    Returns:
+        tensor: tensor of booleans of shape (layer, neuron)
+    """
+    key_tensor = torch.tensor(category_key).to(category_tensor.device)
+    eq = category_tensor==key_tensor
+    return eq.all(dim=-1)
+
 def layerwise_count(category_tensor:torch.Tensor):
     """count how often each category appears per layer
 
@@ -501,9 +515,7 @@ def layerwise_count(category_tensor:torch.Tensor):
     """
     results = {key:torch.zeros(category_tensor.shape[0]) for key in COMBO_TO_NAME}
     for key in COMBO_TO_NAME:
-        key_tensor = torch.tensor(key).to(category_tensor.device)
-        eq = category_tensor==key_tensor
-        results[key] = torch.count_nonzero(eq.all(dim=-1), dim=1)
+        results[key] = torch.count_nonzero(is_in_category(category_tensor, key), dim=1)
     return results
 
 # def count_categories_all(category_tensor):

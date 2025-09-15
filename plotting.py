@@ -226,7 +226,7 @@ def histogram_subplot(ax, diff_nonzero, neuron_subset_name, **kwargs):
     ax.set_title(neuron_subset_name.replace(' ', '\n'))
     return ax
 
-def aligned_histograms(list_data, subtitles, suptitle, savefile, ncols=1, n_bins=None, weighted=False, **kwargs):
+def aligned_histograms(list_data, subtitles, suptitle, savefile, xlabel='', ncols=1, n_bins=None, weighted=False, **kwargs):
     nplots = len(list_data)
     nrows = int(np.ceil(nplots/ncols))
     #ncols = len(list_list_data[0])
@@ -248,12 +248,14 @@ def aligned_histograms(list_data, subtitles, suptitle, savefile, ncols=1, n_bins
         if weighted:
             kwargs['weights'] = np.ones(len(list_data[i])) / len(list_data[i])
         axs_list[i] = histogram_subplot(axs_list[i], list_data[i], subtitles[i], **kwargs)
+    fig.supxlabel(xlabel)
+    fig.supylabel('number of model predictions')
     fig.suptitle(suptitle)
     fig.savefig(savefile, bbox_inches='tight')
     plt.close()
 
-def freq_sim_scatter(ax, data, x, y, title, cbar=True,
-                     #cbar_ax=None,
+def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
+                     cbar_ax=None,
                      weighted=False, vmax=None):
     """
     "Scatter plot" (technically, a bivariate histogram)
@@ -275,16 +277,17 @@ def freq_sim_scatter(ax, data, x, y, title, cbar=True,
     ax = sns.histplot(
         data, x=x, y=y, ax=ax, cbar=cbar, bins=100,
         weights=weights, vmax=vmax,
-        #cbar_ax=cbar_ax,
-        cbar_kws={'orientation': 'horizontal', 'pad':0.02}
+        cbar_ax=cbar_ax,
+        cbar_kws={'orientation': 'vertical', 'pad':0.02}
     )
     # label the colorbar
     #cbar = sns_plot.collections[0].colorbar
-    #cbar.ax.set_xlabel('neuron count')
+    if cbar:
+        cbar_ax.set_ylabel('neuron count')
 
     # Move x-axis labels and ticks to the top
-    ax.xaxis.set_label_position('top')
-    ax.xaxis.tick_top()
+    # ax.xaxis.set_label_position('top')
+    # ax.xaxis.tick_top()
 
     ax.set_ylabel('')
     ax.set_xlabel('')
@@ -296,14 +299,13 @@ def freq_sim_scatter(ax, data, x, y, title, cbar=True,
     ax.plot(data[x], m*data[x] + b, color='red', lw=0.8,alpha=0.8, label=f'corr: {corr:.2f}')
     ax.legend(loc='upper right', fontsize='small')
 
-
     ax.set_ylim(-1, 1)
     ax.set_xlim(-0.02, 1)
     ax.grid(alpha=0.3, linestyle='--')
 
     return ax
 
-def freq_sim_scatter_by_layer(
+def freq_sim_scatter(
     data_by_layer, keys, arrangement, suptitle, savefile, layer_list=None,
 ):
     """
@@ -341,14 +343,15 @@ def freq_sim_scatter_by_layer(
     fig.set_figheight(4*arrangement[0])
 
     axs_list = axes.ravel().tolist()
-    #cbar_ax = fig.add_axes([.91, .3, .03, .4])
+    cbar_ax = fig.add_axes([1, .03, .02, .91])
     for i, layer in enumerate(layer_list):
         data = data_by_layer[layer]
-        axs_list[i] = freq_sim_scatter(
+        cbar = i==len(layer_list)-1
+        axs_list[i] = _freq_sim_scatter(
             axs_list[i], data, x=keys[0], y=keys[1],
-            title=f'Layer {layer}', cbar=(i==0), weighted=False,
+            title=f'Layer {layer}', cbar=cbar, weighted=False,
             vmax=vmax,
-            #cbar_ax=cbar_ax if i==0 else None
+            cbar_ax=cbar_ax if cbar else None
         )
 
     # make y label larger
@@ -359,7 +362,11 @@ def freq_sim_scatter_by_layer(
     fig.suptitle(suptitle)
 
     #fig.tight_layout(rect=[0, 0, .9, 1])
-    plt.savefig(savefile, dpi=150)
+    plt.savefig(
+        savefile,
+        dpi=150,
+        bbox_inches='tight',
+    )
 
 # def _plot_class_changes(ax, pair_to_nchanges_dict):
 #     mat = np.full((11,11), np.nan)

@@ -30,7 +30,7 @@ def compute_data(data_path, metric, neuron_subset_name, intervention_type='zero_
     return diff_nonzero
 
 def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation', **kwargs):
-    absrel = 'Relative' if metric=='scale' else 'Absolute'
+    absrel = '/' if metric=='scale' else '-'
     data_path = f'{args.data_dir}/intervention_results/{args.model}/{args.dataset}'
     baseline_exists = os.path.exists(f'{data_path}/{neuron_subset_names[0]}_baseline')
     print('computing data...')
@@ -55,11 +55,14 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
     experiment_dir = f'plots/{args.experiment_name}'
     if not os.path.exists(experiment_dir):
         os.mkdir(experiment_dir)
+    if args.log:
+        kwargs["log"]=True
     aligned_histograms(
         list_data,
         subtitles=subtitles,
-        suptitle = f'{absrel} effect of neurons on {metric},\nas measured by {intervention_type}',
+        suptitle = '',#f'{absrel} effect of neurons on {metric},\nas measured by {intervention_type}',TODO
         savefile=f'{experiment_dir}/{metric}.pdf',
+        xlabel=f'{metric}(clean) {absrel} {metric}(ablated)',
         ncols = 2,
         **kwargs
     )
@@ -73,7 +76,10 @@ if __name__=='__main__':
     parser.add_argument('--dataset', default='dolma_small')
     parser.add_argument('--metric', default='all')
     parser.add_argument('--intervention_type', default='zero_ablation')
-    parser.add_argument('--neurons', nargs='+', default=['depletion'])
+    parser.add_argument(
+        '--log', type=bool, default=True, help="logarithmic y-axis in the histograms"
+    )#TODO different directory for log vs. linear histograms
+    parser.add_argument('--neurons', nargs='+', default=['weakening'])
     args = parser.parse_args()
     if args.metric=='all':
         for metric in ['entropy', 'loss', 'rank', 'scale']:
@@ -81,11 +87,11 @@ if __name__=='__main__':
             compare(
                 args, metric=metric, neuron_subset_names=args.neurons,
                 intervention_type=args.intervention_type,
-                log=True
+                #log=True
             )
     else:
         compare(
             args, metric=args.metric, neuron_subset_names=args.neurons,
             intervention_type=args.intervention_type,
-            log=True
+            #log=True
         )

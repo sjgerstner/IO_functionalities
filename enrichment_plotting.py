@@ -1,3 +1,8 @@
+"""Plotting code from Geva et al., Dissecting Recall
+Copyright 2023 Google LLC.
+Licensed under the Apache License, Version 2.0 (the "License");
+"""
+
 from argparse import ArgumentParser
 import os
 

@@ -4,37 +4,28 @@ import pickle
 import random
 import torch
 
-CATEGORY_NAMES = ["enrichment",
-            "atypical enrichment",
-            "conditional enrichment",
-            "atypical conditional enrichment",
-            "proportional change",
-            "atypical proportional change",
-            "orthogonal output",
-            "depletion",
-            "atypical depletion",
-            "conditional depletion",
-            "atypical conditional depletion"]
+from utils import COMBO_TO_NAME, is_in_category
 
-def neuron_choice(args, category_name, subset=None, baseline=True):
+# CATEGORY_NAMES = ["enrichment",
+#             "atypical enrichment",
+#             "conditional enrichment",
+#             "atypical conditional enrichment",
+#             "proportional change",
+#             "atypical proportional change",
+#             "orthogonal output",
+#             "depletion",
+#             "atypical depletion",
+#             "conditional depletion",
+#             "atypical conditional depletion"]
+
+def neuron_choice(args, category_key, subset=None, baseline=True):
     """
     Create a list of (some) neurons of the given category,
     plus possibly a random baseline.
 
     Args:
         args: arguments from argument parser
-        category_index (int): neuron category from which to choose.
-            0:"enrichment"
-            1:"atypical enrichment"
-            2:"conditional enrichment"
-            3:"atypical conditional enrichment"
-            4:"proportional change"
-            5:"atypical proportional change"
-            6:"orthogonal output"
-            7:"depletion"
-            8:"atypical depletion"
-            9:"conditional depletion"
-            10:"atypical conditional depletion"
+        category_key (tuple): 
         d_mlp (int):
             number of neurons per layer of the model. Necessary when creating a random baseline.
         subset (None or float or int, default None): how many neurons to choose from the category.
@@ -49,12 +40,12 @@ def neuron_choice(args, category_name, subset=None, baseline=True):
         neuron_list: list of neurons formatted as (layer,neuron) tuples
         other_neuron_list (optional): list of baseline neurons in the same format
     """
-    category_index = CATEGORY_NAMES.index(category_name)
+    #category_index = CATEGORY_NAMES.index(category_name)
     random.seed(2512800)
     path = f"{args.work_dir}/wcos_casestudies/results/{args.model}"
     with open(f"{path}/data.pickle", 'rb') as f:
         data = pickle.load(f)
-    neuron_tensor = torch.nonzero(data['categories']==category_index)
+    neuron_tensor = torch.nonzero(is_in_category(data['categories'],category_key))
     neuron_list = [tuple(line) for line in neuron_tensor]
     if subset is not None:
         if isinstance(subset, float):
@@ -64,11 +55,11 @@ def neuron_choice(args, category_name, subset=None, baseline=True):
         neuron_list = random.sample(neuron_list, subset)
     if baseline:
         #TODO adapt baseline to activation frequencies
-        baseline_list = random_baseline(neuron_list, data['categories'], category_index)
+        baseline_list = random_baseline(neuron_list, data['categories'], category_key)
         return neuron_list, baseline_list
     return neuron_list
 
-def random_baseline(neuron_list, data_categories, category_index):
+def random_baseline(neuron_list, data_categories, category_key):
     """Generate a random list of neurons with the following requirements:
     - no overlap with neuron_list
     - no overlap with the IO class that neuron_list is taken from
@@ -83,7 +74,7 @@ def random_baseline(neuron_list, data_categories, category_index):
         data_categories (tensor of ints):
             tensor of ints, of shape (layer, neuron),
             with entries representing the category of each neuron (see CATEGORY_NAMES)
-        category_index (int): index of the current category
+        category_key (tuple): key of the current category
 
     Returns:
         list of tuples: the baseline neurons
@@ -97,19 +88,20 @@ def random_baseline(neuron_list, data_categories, category_index):
     for layer,number in enumerate(layer_counts):
         if number==0:
             continue
-        baseline_sublist = list(torch.nonzero(data_categories[layer]!=category_index))
+        baseline_sublist = list(torch.nonzero(~is_in_category(data_categories[layer],category_key)))
         if number<d_mlp/2:
             baseline_sublist = random.sample(baseline_sublist, number)
         else:
             print(
-                f"Warning: category {CATEGORY_NAMES[category_index]} covers more than half of neurons in layer {layer} ({number} of {d_mlp})"
+                f"Warning: category {COMBO_TO_NAME[category_key]} covers more than half of neurons",
+                f"in layer {layer} ({number} of {d_mlp})"
             )
         baseline_list.extend([(layer,neuron) for neuron in baseline_sublist])
     return baseline_list
 
-def random_baseline_old(layer, category_index, data, other_neurons, d_mlp):
-    """Unused!"""
-    other_neuron = random.randint(0, d_mlp-1)
-    if (data['categories'][layer,other_neuron]==category_index) or ((layer,other_neuron) in other_neurons):
-        other_neuron = random_baseline_old(layer, category_index, data, other_neurons, d_mlp)
-    return other_neuron
+# def random_baseline_old(layer, category_index, data, other_neurons, d_mlp):
+#     """Unused!"""
+#     other_neuron = random.randint(0, d_mlp-1)
+#     if (data['categories'][layer,other_neuron]==category_index) or ((layer,other_neuron) in other_neurons):
+#         other_neuron = random_baseline_old(layer, category_index, data, other_neurons, d_mlp)
+#     return other_neuron

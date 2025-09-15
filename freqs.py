@@ -133,7 +133,7 @@ if "scatter_plots" in subexps or "selected" in subexps:
     NCOLS = 4
     if "scatter_plots" in subexps:
         for sim in SIMS:
-            plotting.freq_sim_scatter_by_layer(
+            plotting.freq_sim_scatter(
                 data_by_layer,
                 (args.metric, sim),
                 (int(np.ceil(n_layers/NCOLS)), NCOLS),
@@ -141,7 +141,7 @@ if "scatter_plots" in subexps or "selected" in subexps:
                 f'{PLOT_DIR}/{args.metric}_{sim}.pdf'
             )
     if "selected" in subexps:
-        plotting.freq_sim_scatter_by_layer(
+        plotting.freq_sim_scatter(
             data_by_layer,
             (args.metric, "linout"),
             arrangement = (1, len(args.layer_list)),
