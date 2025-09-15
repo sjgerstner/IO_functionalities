@@ -145,7 +145,7 @@ if "scatter_plots" in subexps or "selected" in subexps:
             data_by_layer,
             (args.metric, "linout"),
             arrangement = (1, len(args.layer_list)),
-            suptitle = f"{args.metric} vs. linout in {args.model}",
+            suptitle = f"{plotting.SHORT_TO_LONG[args.metric]} vs. {plotting.SHORT_TO_LONG["linout"]} in {args.model}",
             savefile = f'{PLOT_DIR}/{args.metric}_linout_selected.pdf',
             layer_list=args.layer_list,
         )
