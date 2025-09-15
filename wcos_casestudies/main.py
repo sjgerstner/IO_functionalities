@@ -81,8 +81,7 @@ def cosines(mlp_weights):
     data = {"gatelin":gatelin, "linout":linout, "gateout":gateout, "d_model":mlp_weights["d_model"]}
     return data
 
-def _get_cosine_data(path, model_data):
-    """load and/or compute cosine data"""
+def _load_data_if_exists(path):
     data_file = f"{path}/data.pt"
     if os.path.exists(data_file):
         #print(torch.serialization.get_unsafe_globals_in_checkpoint(data_file))
@@ -97,19 +96,48 @@ def _get_cosine_data(path, model_data):
         # except RuntimeError as e:
         #     print(f"Ignoring error when loading pickle, recomputing data: {e}")
     else:
-        print("computing cosines")
-        data = cosines(model_data)
+        data=None
     return data
 
-def _get_advanced_data(args, model_data, data, model_name, path, checkpoint_value=None):
-    """load and/or compute advanced data"""
+# def _get_cosine_data(path, model_data):
+#     """load and/or compute cosine data"""
+#     data_file = f"{path}/data.pt"
+#     if os.path.exists(data_file):
+#         #print(torch.serialization.get_unsafe_globals_in_checkpoint(data_file))
+#         data = torch.load(
+#             data_file, map_location='cpu',
+#             #weights_only=False,
+#         )
+#     elif os.path.exists(f"{path}/data.pickle"):
+#         #try:
+#         with open(f"{path}/data.pickle", 'rb') as f:
+#             data = pickle.load(f)
+#         # except RuntimeError as e:
+#         #     print(f"Ignoring error when loading pickle, recomputing data: {e}")
+#     else:
+#         print("computing cosines")
+#         data = cosines(model_data)
+#     return data
+
+def _get_basic_data(args, data, model_name, cache_dir=None, checkpoint_value=None):
+    model_data = _load_model_data(
+        model_name,
+        cache_dir=cache_dir, checkpoint_value=checkpoint_value,
+        refactor_glu=args.refactor_glu,
+    )
+    if "linout" not in data:
+        print("computing cosines")
+        data = cosines(model_data)
     if "beta" in args.experiments and "beta" not in data:
         print("computing beta randomness regions")
         data["beta"] = utils.beta_randomness_region(d=data["d_model"])
     if "randomness" in args.experiments and "randomness" not in data:
         print("computing layer-specific randomness regions")
         data["randomness"] = utils.randomness_regions(model_data)
-        #TODO the above won't work when loading precomputed cosines
+    return data
+
+def _get_advanced_data(args, data, model_name, path, checkpoint_value=None):
+    """load and/or compute advanced data"""
     if checkpoint_value is not None:
         model_name=f"{model_name}/{checkpoint_value}"
     #categories and category statistics
@@ -181,11 +209,7 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
     """General function
     that computes weight cosines of the given model
     and then does the analyses specified in the args"""
-    model_data = _load_model_data(
-        model_name,
-        cache_dir=cache_dir, checkpoint_value=checkpoint_value,
-        refactor_glu=args.refactor_glu,
-    )#TODO only when needed
+    
     #path
     path = f"{args.work_dir}/results/{model_name}"
     if args.refactor_glu:
@@ -196,13 +220,15 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
         os.makedirs(path)
 
     #load and/or compute data and save it
-    #cosines
-    data = _get_cosine_data(
-        path, model_data
+    data = _load_data_if_exists(
+        path
     )
+    #cosines etc.
+    if ("linout" not in data) or ("randomness" not in data):
+        data = _get_basic_data(args, data, model_name, cache_dir=cache_dir, checkpoint_value=checkpoint_value)
     #advanced
     data = _get_advanced_data(
-        args, model_data, data, model_name, path, checkpoint_value=checkpoint_value
+        args, data, model_name, path, checkpoint_value=checkpoint_value
     )
     #create various plots if requested and save them
     print("plots")
