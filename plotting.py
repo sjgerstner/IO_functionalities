@@ -252,6 +252,7 @@ def aligned_histograms(list_data, subtitles, savefile, suptitle=None, xlabel='',
     fig.supylabel('number of model predictions')
     if suptitle:
         fig.suptitle(suptitle)
+    #fig.subplots_adjust(wspace=0.5)
     fig.savefig(savefile, bbox_inches='tight')
     plt.close()
 

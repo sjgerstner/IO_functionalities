@@ -32,7 +32,6 @@ def compute_data(data_path, metric, neuron_subset_name, intervention_type='zero_
 def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation', **kwargs):
     absrel = '/' if metric=='scale' else '-'
     data_path = f'{args.data_dir}/intervention_results/{args.model}/{args.dataset}'
-    baseline_exists = os.path.exists(f'{data_path}/{neuron_subset_names[0]}_baseline')
     print('computing data...')
     diffs = {}
     baseline_names=[]
@@ -41,6 +40,7 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
         diffs[neuron_subset_name] = compute_data(
             data_path, metric, neuron_subset_name, intervention_type
         )
+        baseline_exists = os.path.exists(f'{data_path}/{neuron_subset_name}_baseline')
         if baseline_exists:
             baseline_name = neuron_subset_name+'_baseline'
             baseline_names.append(baseline_name)
@@ -48,10 +48,12 @@ def compare(args, metric, neuron_subset_names, intervention_type='zero_ablation'
             diffs[baseline_name] = compute_data(
                 data_path, metric, baseline_name, intervention_type
             )
-    list_data = list(chain.from_iterable(
-        (diffs[name], diffs[name+'_baseline']) for name in neuron_subset_names
-    ))
-    subtitles = list(chain.from_iterable((name, name+'_baseline') for name in neuron_subset_names))
+    # list_data = list(chain.from_iterable(
+    #     (diffs[name], diffs[name+'_baseline']) for name in neuron_subset_names
+    # ))
+    list_data = list(diffs.values())
+    #subtitles = list(chain.from_iterable((name, name+'_baseline') for name in neuron_subset_names))
+    subtitles = list(k.replace('_', ' ', 1) for k in diffs)
     experiment_dir = f'{args.plot_dir}/{args.experiment_name}'
     if not os.path.exists(experiment_dir):
         os.mkdir(experiment_dir)
