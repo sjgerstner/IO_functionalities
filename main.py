@@ -96,7 +96,7 @@ def _load_data_if_exists(path):
         # except RuntimeError as e:
         #     print(f"Ignoring error when loading pickle, recomputing data: {e}")
     else:
-        data=None
+        data={}
     return data
 
 # def _get_cosine_data(path, model_data):
@@ -209,7 +209,7 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
     """General function
     that computes weight cosines of the given model
     and then does the analyses specified in the args"""
-    
+
     #path
     path = f"{args.work_dir}/results/{model_name}"
     if args.refactor_glu:
@@ -225,7 +225,9 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
     )
     #cosines etc.
     if ("linout" not in data) or ("randomness" not in data):
-        data = _get_basic_data(args, data, model_name, cache_dir=cache_dir, checkpoint_value=checkpoint_value)
+        data = _get_basic_data(
+            args, data, model_name, cache_dir=cache_dir, checkpoint_value=checkpoint_value
+        )
     #advanced
     data = _get_advanced_data(
         args, data, model_name, path, checkpoint_value=checkpoint_value

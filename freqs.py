@@ -10,6 +10,7 @@ import torch
 
 import neuron_choice
 from plotting import SHORT_TO_LONG, aligned_histograms, freq_sim_scatter
+from utils import COMBO_TO_NAME
 
 parser = ArgumentParser()
 parser.add_argument('--work_dir', default=None)
@@ -45,8 +46,8 @@ if "layer_plots" in subexps:#not os.path.exists(LAYER_PATH):
     aligned_histograms(
         [list(freq_tensor[layer]) for layer in range(n_layers)],
         [str(i) for i in range(n_layers)],
-        f"{args.metric} by layer in {args.model}",
-        LAYER_PATH,
+        savefile = LAYER_PATH,
+        suptitle = f"{SHORT_TO_LONG[args.metric]} by layer in {args.model}",
         xlabel=SHORT_TO_LONG[args.metric],
         ncols=4,
         log=args.log,
@@ -57,9 +58,9 @@ if "layer_plots" in subexps:#not os.path.exists(LAYER_PATH):
 CATEGORY_PATH = f'{PLOT_DIR}/{args.metric}_categories_{args.log}.pdf'
 if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGORY_PATH):
     my_data = []
-    for i,name in enumerate(neuron_choice.CATEGORY_NAMES):
+    for i,key in enumerate(COMBO_TO_NAME.keys()):
         #lists of (layer neuron) tuples
-        neuron_list, baseline_list = neuron_choice.neuron_choice(args, name)
+        neuron_list, baseline_list = neuron_choice.neuron_choice(args, key)
         my_data.append([freq_tensor[index].item() for index in neuron_list])
         my_data.append([freq_tensor[index].item() for index in baseline_list])
 
@@ -67,10 +68,10 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
         aligned_histograms(
             my_data,
             list(chain.from_iterable(
-                (name, name+'_baseline') for name in neuron_choice.CATEGORY_NAMES
+                (name, name+'_baseline') for name in COMBO_TO_NAME.values()
             )),
             savefile=CATEGORY_PATH,
-            suptitle=f"{args.metric} of neurons in {args.model}",
+            suptitle=f"{SHORT_TO_LONG[args.metric]} of neurons in {args.model}",
             xlabel=SHORT_TO_LONG[args.metric],
             ncols=2,
             log=args.log,
@@ -95,9 +96,9 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
         PICKLE_MEANS = f'{PLOT_DIR}/{args.metric}_means.pickle'
         if not os.path.exists(PICKLE_MEANS):
             means = [np.mean(np.array(subset)) for subset in my_data]
-            means = np.array(means).reshape((len(neuron_choice.CATEGORY_NAMES),2))
+            means = np.array(means).reshape((len(COMBO_TO_NAME),2))
             table = pd.DataFrame(
-                means, index=neuron_choice.CATEGORY_NAMES, columns=["true", "baseline"]
+                means, index=COMBO_TO_NAME, columns=["true", "baseline"]
             )
             table.to_pickle(PICKLE_MEANS)
         else:
