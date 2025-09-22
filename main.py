@@ -26,10 +26,11 @@ EXPERIMENT_LIST = [
     "category_stats",#compute statistics of IO classes by layer
     #"quartiles",#compute quartiles of cosine similarities (by layer)
     "plot_fine",#create fine-grained plot
+    "plot_selected",
     "plot_coarse",#create coarse-grained plot (categories by layer)
     "plot_boxplots",#make boxplots of cosine similarities by layer
     "plot_all_medians",#make one plot with the median cos(w_in,w_out) similarities (y) across layers (x) of all models (one line per model)
-    "plot_selected",
+    "plot_selected_medians",
 ]
 MODEL_LIST = [
     "allenai/OLMo-7B-0424-hf",
@@ -270,15 +271,27 @@ if __name__=="__main__":
         help="selected layers for main paper plot"
     )
     args = parser.parse_args()
-    if "plot_all_medians" in args.experiments:
+    if "plot_all_medians" in args.experiments or "plot_selected_medians" in args.experiments:
         model_to_medians_dict = {}
     for model_name in args.model:
         print(model_name)
         data = analysis(args, model_name)
-        if "plot_all_medians" in args.experiments:
-            model_to_medians_dict[model_name] = data["linout_quartiles"][2,:].flatten().cpu()
+        if "plot_all_medians" in args.experiments or "plot_selected_medians" in args.experiments:
+            #model_to_medians_dict[model_name] = data["linout_quartiles"][2,:].flatten().cpu()
+            model_to_medians_dict[model_name] = utils.torch_quantile(data["linout"], q=.5, dim=1)
         del data
     if "plot_all_medians" in args.experiments:
         fig, ax = plotting.plot_all_medians(model_to_medians_dict)
-        fig.savefig('results/medians.pdf', bbox_inches='tight')
+        fig.savefig(f'{args.work_dir}/results/medians.pdf', bbox_inches='tight')
+        plt.close()
+    if "plot_selected_medians" in args.experiments:
+        tiny_models = [
+            model_name for model_name in MODEL_LIST
+            if "1b" in model_name.lower() or "0.5b" in model_name.lower()
+        ]
+        filtered_dict = {
+            key:value for key,value in model_to_medians_dict.items() if key not in tiny_models
+        }
+        fig, ax = plotting.plot_all_medians(filtered_dict)
+        fig. savefig(f'{args.work_dir}/results/selected_medians.pdf', bbox_inches='tight')
         plt.close()
