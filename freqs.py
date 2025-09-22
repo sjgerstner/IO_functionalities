@@ -115,33 +115,35 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
 #scatter plots
 if "scatter_plots" in subexps or "selected" in subexps:
     #tensor of category by neuron
-    PATH = f"{args.work_dir}/{args.wcos_dir}/results/{args.model}"
-    with open(f"{PATH}/data.pickle", 'rb') as f:
-        data = pickle.load(f)
-    linout = data["linout"]
-    absgateout = torch.abs(data["gateout"])
-    absgatelin = torch.abs(data["gatelin"])
+    PATH = f"{args.work_dir}/{args.wcos_dir}/results/{args.model}/refactored"
+    data = torch.load(f"{PATH}/data.pt")
+    # with open(f"{PATH}/data.pt", 'rb') as f:
+    #     data = pickle.load(f)
+    # linout = data["linout"]
+    # gateout = data["gateout"]
+    # gatelin = data["gatelin"]
+    data[args.metric] = freq_tensor
 
     #scatter plots
     SIMS = ["linout", "gateout", "gatelin"]
     data_by_layer = [
         {
-            args.metric: freq_tensor[layer],
-            "linout": linout[layer],
-            "gateout": absgateout[layer],
-            "gatelin": absgatelin[layer],
+            key:value[layer] for key,value in data.items()
+            if key in ["linout", "gateout", "gatelin", args.metric]
         }
         for layer in range(n_layers)
     ]
     NCOLS = 4
     if "scatter_plots" in subexps:
         for sim in SIMS:
+            absy = sim=="gatelin"
             freq_sim_scatter(
                 data_by_layer,
                 (args.metric, sim),
                 (int(np.ceil(n_layers/NCOLS)), NCOLS),
-                suptitle = f"{SHORT_TO_LONG[args.metric]} vs. {SHORT_TO_LONG["linout"]} in {args.model}",
-                savefile=f'{PLOT_DIR}/{args.metric}_{sim}.pdf'
+                suptitle = f"{SHORT_TO_LONG[args.metric]} vs. {SHORT_TO_LONG[sim]} in {args.model}",
+                savefile=f'{PLOT_DIR}/{args.metric}_{sim}.pdf',
+                absy=absy,
             )
     if "selected" in subexps:
         freq_sim_scatter(

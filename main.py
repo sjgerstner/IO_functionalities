@@ -229,6 +229,7 @@ def analysis(args, model_name, cache_dir=None, checkpoint_value=None):
         data = _get_basic_data(
             args, data, model_name, cache_dir=cache_dir, checkpoint_value=checkpoint_value
         )
+        torch.save(data, f"{path}/data.pt")
     #advanced
     data = _get_advanced_data(
         args, data, model_name, path, checkpoint_value=checkpoint_value

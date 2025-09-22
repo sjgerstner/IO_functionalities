@@ -263,7 +263,8 @@ def aligned_histograms(list_data, subtitles, savefile, suptitle=None, xlabel='',
 
 def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
                      cbar_ax=None,
-                     weighted=False, vmax=None):
+                     weighted=False, vmax=None,
+                     ylim=-1):
     """
     "Scatter plot" (technically, a bivariate histogram)
     of sparsity (x) vs in_out_sim (y).
@@ -313,16 +314,13 @@ def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
     ax.legend(loc='upper right', fontsize='small')
 
     ax.set_xlim(-0.02, 1)
-    if (data[y]>=0).all():
-        ax.set_ylim(0,1)
-    else:
-        ax.set_ylim(-1, 1)
+    ax.set_ylim(ylim, 1)
     ax.grid(alpha=0.3, linestyle='--')
 
     return ax
 
 def freq_sim_scatter(
-    data_by_layer, keys, arrangement, suptitle, savefile, layer_list=None,
+    data_by_layer, keys, arrangement, suptitle, savefile, layer_list=None, absy=False,
 ):
     """
     A figure containing, for each layer, a "scatter plot" (technically, a bivariate histogram)
@@ -362,12 +360,18 @@ def freq_sim_scatter(
     cbar_ax = fig.add_axes([1, .03, .02, .91])
     for i, layer in enumerate(layer_list):
         data = data_by_layer[layer]
+        if absy:
+            data[keys[1]] = torch.abs(data[keys[1]])
+            ylim=0
+        else:
+            ylim=-1
         cbar = i==len(layer_list)-1
         axs_list[i] = _freq_sim_scatter(
             axs_list[i], data, x=keys[0], y=keys[1],
             title=f'Layer {layer}', cbar=cbar, weighted=False,
             vmax=vmax,
-            cbar_ax=cbar_ax if cbar else None
+            cbar_ax=cbar_ax if cbar else None,
+            ylim=ylim,
         )
 
     # make y label larger
