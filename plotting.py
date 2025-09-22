@@ -3,6 +3,7 @@
 import itertools
 
 import numpy as np
+from scipy import stats
 import torch
 
 import matplotlib.pyplot as plt
@@ -275,7 +276,8 @@ def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
     x, y: two keys in data
     """
     if weighted:
-        weights=np.ones(len(data[x]))/len(data[x])
+        n=len(data[x])
+        weights=np.ones(n)/n
         if vmax is None:
             vmax=1.
     else:
@@ -299,10 +301,15 @@ def _freq_sim_scatter(ax, data, x, y, title, cbar=True,
     ax.set_xlabel('')
     ax.set_title(title)
 
-    corr = np.corrcoef(data[x], data[y])[0, 1]
+    #corr = np.corrcoef(data[x], data[y])[0, 1]
     m, b = np.polyfit(data[x], data[y], 1)
+    corr_and_p = stats.pearsonr(data[x], data[y])
 
-    ax.plot(data[x], m*data[x] + b, color='red', lw=0.8,alpha=0.8, label=f'corr: {corr:.2f}')
+    p_string = "p<0.01" if corr_and_p.pvalue<0.01 else f"p: {corr_and_p.pvalue:.2f}"
+    ax.plot(
+        data[x], m*data[x] + b, color='red', lw=0.8,alpha=0.8,
+        label=f'corr: {corr_and_p.correlation:.2f}\n{p_string}'
+    )
     ax.legend(loc='upper right', fontsize='small')
 
     ax.set_xlim(-0.02, 1)
