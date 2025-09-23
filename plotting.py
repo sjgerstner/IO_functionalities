@@ -231,7 +231,10 @@ def histogram_subplot(ax, diff_nonzero, neuron_subset_name, **kwargs):
     ax.set_title(neuron_subset_name.replace(' ', '\n'))
     return ax
 
-def aligned_histograms(list_data, subtitles, savefile, suptitle=None, xlabel='', ncols=1, n_bins=None, weighted=False, **kwargs):
+def aligned_histograms(
+    list_data, subtitles, savefile, suptitle=None, xlabel='', ylabel='number of model predictions',
+    ncols=1, n_bins=None, weighted=False, **kwargs
+):
     nplots = len(list_data)
     nrows = int(np.ceil(nplots/ncols))
     #ncols = len(list_list_data[0])
@@ -254,7 +257,7 @@ def aligned_histograms(list_data, subtitles, savefile, suptitle=None, xlabel='',
             kwargs['weights'] = np.ones(len(list_data[i])) / len(list_data[i])
         axs_list[i] = histogram_subplot(axs_list[i], list_data[i], subtitles[i], **kwargs)
     fig.supxlabel(xlabel)
-    fig.supylabel('number of model predictions')
+    fig.supylabel(ylabel)
     if suptitle:
         fig.suptitle(suptitle)
     #fig.subplots_adjust(wspace=0.5)

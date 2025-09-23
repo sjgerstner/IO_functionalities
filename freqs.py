@@ -41,14 +41,15 @@ PLOT_DIR = f'{args.work_dir}/plots/freq/{args.model}'
 os.makedirs(PLOT_DIR, exist_ok=True)
 
 #plotting by layer
-LAYER_PATH = f'{PLOT_DIR}/{args.metric}_layers_{args.log}.pdf'
+LAYER_PATH = f'{PLOT_DIR}/{args.metric}_layers{"_log" if args.log else ""}.pdf'
 if "layer_plots" in subexps:#not os.path.exists(LAYER_PATH):
     aligned_histograms(
         [list(freq_tensor[layer]) for layer in range(n_layers)],
-        [str(i) for i in range(n_layers)],
+        [f"Layer {i}" for i in range(n_layers)],
         savefile = LAYER_PATH,
         suptitle = f"{SHORT_TO_LONG[args.metric]} by layer in {args.model}",
         xlabel=SHORT_TO_LONG[args.metric],
+        ylabel="proportion of neurons",
         ncols=4,
         log=args.log,
         weighted=True,
@@ -60,7 +61,7 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
     my_data = []
     for i,key in enumerate(COMBO_TO_NAME.keys()):
         #lists of (layer neuron) tuples
-        neuron_list, baseline_list = neuron_choice.neuron_choice(args, key)
+        neuron_list, baseline_list = neuron_choice.neuron_choice(args, key)#TODO refactoring has introduced a bug here
         my_data.append([freq_tensor[index].item() for index in neuron_list])
         my_data.append([freq_tensor[index].item() for index in baseline_list])
 
@@ -73,6 +74,7 @@ if "category_plots" in subexps or "table" in subexps:#not os.path.exists(CATEGOR
             savefile=CATEGORY_PATH,
             suptitle=f"{SHORT_TO_LONG[args.metric]} of neurons in {args.model}",
             xlabel=SHORT_TO_LONG[args.metric],
+            ylabel="proportion of neurons",
             ncols=2,
             log=args.log,
             weighted=True
