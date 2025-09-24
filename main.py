@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import torch
 import einops
 from transformer_lens import HookedTransformer
+from transformer_lens.loading_from_pretrained import OLMO_CHECKPOINTS_1B, OLMO_CHECKPOINTS_7B
 
 import plotting
 import utils
@@ -47,12 +48,17 @@ MODEL_LIST = [
     "yi-6b",
 ]
 
+MODEL_TO_CHECKPOINTS = {
+    'allenai/OLMo-1B-hf': OLMO_CHECKPOINTS_1B,
+    'allenai/OLMo-7B-0424-hf': OLMO_CHECKPOINTS_7B,
+}
+
 def _load_model_data(model_name, cache_dir=None, checkpoint_value=None, refactor_glu=True):
     model = HookedTransformer.from_pretrained(
         model_name,
         checkpoint_value=checkpoint_value,
         cache_dir=cache_dir,
-        local_files_only=True,
+        local_files_only=True,#TODO you can change this to false if needed
         device='cpu',
         refactor_glu=refactor_glu,
         ) #changed the transformer_lens code, don't disable fold_ln
@@ -261,6 +267,14 @@ if __name__=="__main__":
         help='one or several TransformerLens models',
         )
     parser.add_argument(
+        "--checkpoints",
+        nargs='+',
+        default=[None],
+        type=int,
+        help="""which training checkpoints of the given model to analyse
+        (type: int representing the index in the official checkpoint list)"""
+    )
+    parser.add_argument(
         "--selected_model",
         default="meta-llama/Llama-3.2-3B",
         help="model to plot selected layers from",
@@ -276,11 +290,20 @@ if __name__=="__main__":
         model_to_medians_dict = {}
     for model_name in args.model:
         print(model_name)
-        data = analysis(args, model_name)
-        if "plot_all_medians" in args.experiments or "plot_selected_medians" in args.experiments:
-            #model_to_medians_dict[model_name] = data["linout_quartiles"][2,:].flatten().cpu()
-            model_to_medians_dict[model_name] = utils.torch_quantile(data["linout"], q=.5, dim=1)
-        del data
+        if args.checkpoints==[None]:
+            data = analysis(args, model_name)
+            if "plot_all_medians" in args.experiments or "plot_selected_medians" in args.experiments:
+                #model_to_medians_dict[model_name] = data["linout_quartiles"][2,:].flatten().cpu()
+                model_to_medians_dict[model_name] = utils.torch_quantile(data["linout"], q=.5, dim=1)
+            del data
+        else:
+            for checkpoint_index in args.checkpoints:
+                data = analysis(
+                    args, model_name,
+                    checkpoint_value=MODEL_TO_CHECKPOINTS[model_name][checkpoint_index],
+                    cache_dir='/nfs/datz/olmo_models',
+                )
+                del data
     if "plot_all_medians" in args.experiments:
         fig, ax = plotting.plot_all_medians(model_to_medians_dict)
         fig.savefig(f'{args.work_dir}/results/medians.pdf', bbox_inches='tight')
