@@ -12,6 +12,8 @@
 
 # %%
 import gc
+import json
+from os.path import exists
 import pickle
 
 import numpy as np
@@ -19,20 +21,25 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 import torch
+#from torch.linalg import vector_norm
 from transformer_lens import HookedTransformer
 from transformer_lens.utils import get_act_name
 
 import utils
 
 # %%
-torch.no_grad()
+torch.set_grad_enabled(False)
 pd.set_option('display.max_rows', None)
 
 # %%
-MODEL_NAME = "allenai/OLMo-7B-0424-hf" #Not supported by the original TransformerLens!
+MODEL_NAME = "allenai/OLMo-7B-0424-hf"
+REFACTOR_GLU = True
+WORK_DIR = "/mounts/work/sgerstner" #TODO
 
 # %%
-model = HookedTransformer.from_pretrained(MODEL_NAME, device='cuda')
+model = HookedTransformer.from_pretrained(MODEL_NAME, device='cuda', refactor_glu=REFACTOR_GLU)
+n_layers = model.cfg.n_layers
+d_mlp = model.cfg.d_mlp
 
 # %%
 W_out = model.W_out.detach()
@@ -40,33 +47,41 @@ W_U = model.W_U.detach()
 
 #%%
 #load the data from running main.py
-with open(f'results/{MODEL_NAME}/data.pickle', 'rb') as f:
-    data = pickle.load(f)
+PATH = f'{WORK_DIR}/results/{MODEL_NAME}'
+if REFACTOR_GLU:
+    PATH += '/refactored'
+PICKLE_PATH = f'{PATH}/data.pickle'
+PT_PATH = f'{PATH}/data.pt'
+if exists(PT_PATH):
+    data = torch.load(PT_PATH, map_location='cuda')
+elif exists(PICKLE_PATH):
+    with open(PICKLE_PATH, 'rb') as f:
+        data = pickle.load(f)
+else:
+    raise RuntimeError("You haven't computed the cosines data yet! Please run main.py first.")
+
 gatelin = data['gatelin'].cuda()
 gateout = data['gateout'].cuda()
 linout = data['linout'].cuda()
-
 # %%
 WUWout = torch.einsum("l n d, d v -> l n v", W_out, W_U)
 print(WUWout.shape)
 
 # %%
-norm_out = torch.linalg.vector_norm(W_out, dim=-1, keepdim=True)#l n 1
+norm_out = W_out.vector_norm(dim=-1, keepdim=True)#l n 1
 print(norm_out.shape)
-norm_U = torch.linalg.vector_norm(W_U, dim=0, keepdim=True)#1 v
+norm_U = W_U.vector_norm(dim=0, keepdim=True)#1 v
 print(norm_U.shape)
 
 # %%
-norm_U = torch.unsqueeze(norm_U, dim=0)
+norm_U = torch.unsqueeze(norm_U, dim=0)#l 1 v
 
 # %%
-WUWout /= norm_out
-WUWout /= norm_U
+WUWout /= (norm_out*norm_U)
 print(WUWout.shape)
 
 # %%
-with open('cosWUWout.pickle', 'wb') as f:
-    pickle.dump(WUWout, f)
+torch.save(WUWout, f'{PATH}/cosWUWout.pt')
 
 # %% [markdown]
 # #### Partition neurons
@@ -79,15 +94,14 @@ variances = torch.var(WUWout, dim=2).cpu() #layer neuron
 p_variances, p_indices = torch.topk(variances.flatten(), k=1000)
 print('lowest variance considered:', p_variances[-1])
 
-p_indices_layer = p_indices // 11008
-p_indices_neuron = p_indices % 11008
+p_indices_layer = p_indices // d_mlp
+p_indices_neuron = p_indices % d_mlp
 p_indices_readable = torch.stack(
     [[p_indices_layer[i], p_indices_neuron[i]] for i in range(len(p_indices_layer))]
 )
 
 # %%
-with open('partition.pickle', 'wb') as f:
-    pickle.dump(p_indices_readable, f)
+torch.save(p_indices_readable, f'{PATH}/partition.pt')
 
 # %% [markdown]
 # #### Prediction / suppression neurons
@@ -118,29 +132,33 @@ ps_indices = ps.nonzero()
 print(ps_indices)
 
 # %%
-# The following is necessary to (approximately) distinguish prediction from suppression in a gated activation function
-pred_indices = []
-supp_indices = []
-for ln in ps_indices:
-    #print(ln)
-    if torch.sign(gatelin[ln[0], ln[1]])*torch.sign(skews[ln[0], ln[1]])>0:
-        pred_indices.append(ln)
-    else:
-        supp_indices.append(ln)
+if not REFACTOR_GLU:
+    # The following is necessary to (approximately) distinguish
+    # prediction from suppression in a gated activation function,
+    # if not refactoring glu
+    pred_indices = []
+    supp_indices = []
+    for ln in ps_indices:
+        #print(ln)
+        if torch.sign(gatelin[ln[0], ln[1]])*torch.sign(skews[ln[0], ln[1]])>0:
+            pred_indices.append(ln)
+        else:
+            supp_indices.append(ln)
+    pred_indices = torch.stack(pred_indices)
+    supp_indices = torch.stack(supp_indices)
+
+else:
+    pred_indices = ((kurtoses>max_part_kurt) & (skews>0)).nonzero()
+    supp_indices = ((kurtoses>max_part_kurt) & (skews<0)).nonzero()
 
 # %%
-pred_indices = torch.stack(pred_indices)
-supp_indices = torch.stack(supp_indices)
-
-# %%
-with open('pred-supp.pickle', 'wb') as f:
-    pickle.dump({"prediction":pred_indices, "suppression":supp_indices}, f)
+torch.save({"prediction":pred_indices, "suppression":supp_indices}, f'{PATH}/pred-supp.pt')
 
 # %% [markdown]
 # #### Entropy neurons
 
 # %%
-norms = torch.linalg.vector_norm(W_out[-1,:,:], dim=-1)
+norms = W_out[-1,:,:].vector_norm(dim=-1)
 
 # %%
 U,S,V = torch.svd(W_U)
@@ -149,9 +167,9 @@ U,S,V = torch.svd(W_U)
 U_null = U[:,4056:]
 
 # %%
-null_norm_ratios = torch.linalg.vector_norm(
-    torch.einsum("... n d, d v -> ... n v", W_out, U_null), dim=-1
-) / norms
+null_norm_ratios = torch.einsum(
+    "... n d, d v -> ... n v", W_out, U_null
+).vector_norm(dim=-1) / norms
 
 # %%
 fig, ax = plt.subplots()
@@ -160,7 +178,8 @@ fig.show()
 
 # %% [markdown]
 # The above figure shows that two neurons stand out.
-# The following code prints their null norm ratios (ratios) and their neuron indices within layer 31 (indices).
+# The following code prints their null norm ratios (ratios)
+# and their neuron indices within layer 31 (indices).
 
 # %%
 ratios, entropy_indices = torch.topk(null_norm_ratios, k=2)
@@ -182,7 +201,7 @@ print(BOS_cache['blocks.0.attn.hook_k'].shape)
 # (batch pos n_heads d_head)
 
 # %%
-W_out_normalised = W_out / torch.linalg.vector_norm(W_out, dim=-1, keepdim=True)
+W_out_normalised = W_out / W_out.vector_norm(dim=-1, keepdim=True)
 
 # %% [markdown]
 # It may be better to normalise the qk vector too, so that results are comparable across heads.
@@ -196,7 +215,7 @@ for attn_layer in range(1,32):
         BOS_cache[f'blocks.{attn_layer}.attn.hook_k'].squeeze(),
         model.W_Q.detach()[attn_layer,:,:,:]
     )
-    qk_normalised = qk / torch.linalg.vector_norm(qk, dim=1, keepdim=True)
+    qk_normalised = qk / qk.vector_norm(dim=1, keepdim=True)
     Qk_normalised.append(qk_normalised)
     scores_normalised.append(
         torch.einsum('l n D, h D -> l n h', W_out_normalised[:attn_layer,:,:], qk_normalised)
@@ -229,8 +248,9 @@ print(scores_diagonal.shape)
 cutoff = np.sqrt(.5)
 
 # %%
-special_diagonal = (torch.abs(scores_diagonal)>cutoff)
-n_special_diagonal = torch.count_nonzero(special_diagonal, dim=1).T #number of heads a given neuron (de)activates
+special_diagonal = torch.abs(scores_diagonal)>cutoff
+#number of heads a given neuron (de)activates:
+n_special_diagonal = torch.count_nonzero(special_diagonal, dim=1).T
 print(n_special_diagonal.shape)
 print(n_special_diagonal.count_nonzero())
 ad_indices = torch.nonzero(n_special_diagonal)
@@ -263,22 +283,26 @@ for i in ad_indices:
 
 # %% [markdown]
 # We count only the first four as attention (de)activation.
-# 
+#
 # We still need to find out if it's activation or deactivation:
 
 # %%
 for i in ad_indices[:4,:]:
     print("======")
     print("neuron", i)
-    if gatelin[i[0],i[1]] * scores_diagonal[i[1],i[0], torch.argmax(torch.abs(scores_diagonal[i[1],i[0],:]))] > 0:
+    number_to_check = scores_diagonal[
+        i[1],i[0], torch.argmax(torch.abs(scores_diagonal[i[1],i[0],:]))
+    ]
+    if not REFACTOR_GLU:
+        number_to_check *= gatelin[i[0],i[1]]
+    if number_to_check > 0:
         print("deactivation")
     else:
         print("activation")
 
 # %%
-scores_to_pickle = torch.stack([scores_diagonal[i[1],:,i[0]] for i in ad_indices])
-with open('attention.pickle', 'wb') as f:
-    pickle.dump([ad_indices, scores_to_pickle], f)
+scores_to_save = torch.stack([scores_diagonal[i[1],:,i[0]] for i in ad_indices])
+torch.save([ad_indices, scores_to_save], f'{PATH}/attention.pt')
 
 # %% [markdown]
 # ### Comparing with our classification
@@ -286,31 +310,31 @@ with open('attention.pickle', 'wb') as f:
 # %%
 print("Partition:")
 part_io = utils.count_categories(p_indices_readable, gatelin, gateout, linout)
-print(part_io)
+utils.pretty_print(part_io)
 
 # %%
 print("Prediction:")
 pred_io = utils.count_categories(pred_indices, gatelin, gateout, linout)
-print(pred_io)
+utils.pretty_print(pred_io)
 
 # %%
 print("Suppression:")
 supp_io = utils.count_categories(supp_indices, gatelin, gateout, linout)
-print(supp_io)
+utils.pretty_print(supp_io)
 
 # %%
 print("Entropy:")
 ent_io = utils.count_categories(entropy_indices, gatelin, gateout, linout)
-print(ent_io)
+utils.pretty_print(ent_io)
 
 # %%
 print("Attention deactivation:")
 ad_io = utils.count_categories(ad_indices[:4,:], gatelin, gateout, linout)
-print(ad_io)
+utils.pretty_print(ad_io)
 
 # %%
-with open("contingency.pickle", 'wb') as f:
-    pickle.dump(
+with open("contingency.json", 'w', encoding='utf-8') as f:
+    json.dump(
         {
             "partition": part_io,
             "prediction": pred_io,
@@ -358,7 +382,7 @@ for key, value in pred_classes.items():
             best_index = (layer,neuron)
             max_kurt = kurtoses[layer,neuron]
     print(f"clearest prediction neuron in class {key}: {best_index} with kurtosis {max_kurt}")
-    if key not in ["depletion", "orthogonal output"]:
+    if key not in [(-1,1,1), (0,0,1)]:#weakening, orthogonal output
         neuron_list.append(best_index)
 
 # %%
