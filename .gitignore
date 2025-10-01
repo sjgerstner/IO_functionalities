@@ -1,5 +1,5 @@
-*.ipynb
-update.py
+# *.ipynb
+# update.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,9 +1,0 @@
-circuitsvis==1.43.3
-datasets==3.3.2
-einops==0.8.1
-matplotlib==3.10.0
-numpy==2.0.1
-pandas==2.2.3
-torch==2.5.1.post303
-tqdm==4.67.1
-transformers==4.49.0
