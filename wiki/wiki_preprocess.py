@@ -137,8 +137,8 @@ with open(CONTENT_PATH, 'rb') as file:
                 ).strip(
                 ).replace(
                     '\n', ' '#if there's a newline in the middle replace it with a space
-                )+'\n'
-                if paragraph=='\n':
+                )+'\n\n'#previously \n, this is a correction to avoid having to use wiki_clean.py
+                if paragraph=='\n\n':#same correction as above
                     continue
                 title_to_write = ' '.join(
                     extractor.clean_text('. '.join(current_title))
