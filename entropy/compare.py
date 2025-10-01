@@ -1,11 +1,11 @@
 #%%
 from argparse import ArgumentParser
-from itertools import chain
+#from itertools import chain
 import os
 
 import torch
 
-from plotting import aligned_histograms
+from ..plotting import aligned_histograms
 
 #%%
 def compute_data(data_path, metric, neuron_subset_name, intervention_type='zero_ablation'):

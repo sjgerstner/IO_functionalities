@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from intervention import make_hooks
+from ..entropy.intervention import make_hooks
 
 #%%
 #from the utils.py of Geva et al, Dissecting Recall

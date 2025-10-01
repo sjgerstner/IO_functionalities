@@ -5,9 +5,9 @@ import torch
 import datasets
 from transformer_lens import HookedTransformer
 
-from entropy_intervention import run_intervention_experiment
-from neuron_choice import neuron_choice
-from utils import NAME_TO_COMBO
+from .entropy_intervention import run_intervention_experiment
+from ..neuron_choice import neuron_choice
+from ..utils import NAME_TO_COMBO
 
 def run_with_baseline(
     args,

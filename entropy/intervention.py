@@ -40,7 +40,8 @@ from torch.utils.data import DataLoader
 from transformer_lens import HookedTransformer
 import torch.nn.functional as F
 from transformer_lens.utils import lm_cross_entropy_loss
-from activations import get_correct_token_rank
+
+from .activations import get_correct_token_rank
 
 
 def quantize_neurons(activation_tensor, output_precision=8):

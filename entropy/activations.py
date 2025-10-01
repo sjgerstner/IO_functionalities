@@ -35,11 +35,11 @@ import argparse
 import numpy as np
 import pandas as pd
 from functools import partial
-from utils import get_model_family
 from torch.utils.data import DataLoader
 from transformer_lens import HookedTransformer
 from transformer_lens.utils import lm_cross_entropy_loss
 
+from .utils import get_model_family
 
 def quantize_neurons(activation_tensor, output_precision=8):
     activation_tensor = activation_tensor.to(torch.float32)

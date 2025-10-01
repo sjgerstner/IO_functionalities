@@ -1,7 +1,9 @@
 """
+Modified from Geva et al. 2023, Dissecting recall.
 Copyright 2023 Google LLC.
-Licensed under the Apache License, Version 2.0 (the "License");
-modifications:
+Licensed under the Apache License, Version 2.0 (the "License").
+
+Modifications:
 Jupyter to Python script,
 only subject enrichment code and only for final subject position,
 using transformer_lens,
@@ -20,13 +22,13 @@ import torch
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
 # Utilities
-from enrichment_utils import (
+from .enrichment_utils import (
     find_token_range,
     record_logitlens,
     decode_tokens,
 )
-from neuron_choice import neuron_choice
-from utils import NAME_TO_COMBO
+from ..neuron_choice import neuron_choice
+from ..utils import NAME_TO_COMBO
 
 if __name__=="__main__":
     parser = ArgumentParser()

@@ -1,6 +1,6 @@
 from tqdm import tqdm
 
-from wiki_retrieve import nonblank_lines
+from .wiki_retrieve import nonblank_lines
 
 with open('/mounts/work/sgerstner/wiki/paragraphs.txt', 'r+', encoding='utf-8') as f:
     lines = nonblank_lines(f)
