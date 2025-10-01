@@ -1,5 +1,7 @@
 """
-Modified from Geva et al. 2023, Dissecting recall.
+Modified from Geva et al. 2023, Dissecting recall:
+https://github.com/google-research/google-research/tree/master/dissecting_factual_predictions
+
 Copyright 2023 Google LLC.
 Licensed under the Apache License, Version 2.0 (the "License").
 

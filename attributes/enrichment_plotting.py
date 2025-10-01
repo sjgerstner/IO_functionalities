@@ -1,4 +1,6 @@
-"""Plotting code from Geva et al., Dissecting Recall
+"""Plotting code from Geva et al., Dissecting Recall:
+https://github.com/google-research/google-research/tree/master/dissecting_factual_predictions
+
 Copyright 2023 Google LLC.
 Licensed under the Apache License, Version 2.0 (the "License");
 """

@@ -1,5 +1,6 @@
 """
-Largely copied from Gurnee et al. 2024, Universal neurons
+Largely copied from Gurnee et al. 2024, Universal neurons:
+https://github.com/wesg52/universal-neurons
 
 MIT License
 
