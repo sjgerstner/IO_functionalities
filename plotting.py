@@ -191,6 +191,8 @@ def plot_boxplots(data, model_name):
     fig.set_figwidth(6.75)
     fig.set_figheight(4.5)
     for i, (k,v) in enumerate(SHORT_TO_LONG.items()):
+        if k=="summary_freq":
+            continue
         mydata = data[k]
         if 'gate' in k:
             mydata = torch.abs(mydata)
